@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ohci.cc 13497 2018-05-01 15:54:37Z vruppert $
+// $Id: usb_ohci.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2018  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -105,25 +105,26 @@ Bit32s usb_ohci_options_save(FILE *fp)
   return 0;
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libusb_ohci_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_ohci)
 {
-  theUSB_OHCI = new bx_usb_ohci_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_OHCI, BX_PLUGIN_USB_OHCI);
-  // add new configuration parameter for the config interface
-  SIM->init_usb_options("OHCI", "ohci", USB_OHCI_PORTS);
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("usb_ohci", usb_ohci_options_parser, usb_ohci_options_save);
+  if (mode == PLUGIN_INIT) {
+    theUSB_OHCI = new bx_usb_ohci_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_OHCI, BX_PLUGIN_USB_OHCI);
+    // add new configuration parameter for the config interface
+    SIM->init_usb_options("OHCI", "ohci", USB_OHCI_PORTS);
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("usb_ohci", usb_ohci_options_parser, usb_ohci_options_save);
+  } else if (mode == PLUGIN_FINI) {
+    SIM->unregister_addon_option("usb_ohci");
+    bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.usb");
+    delete theUSB_OHCI;
+    menu->remove("ohci");
+  } else {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_ohci_LTX_plugin_fini(void)
-{
-  SIM->unregister_addon_option("usb_ohci");
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.usb");
-  delete theUSB_OHCI;
-  menu->remove("ohci");
 }
 
 // the device object
@@ -515,7 +516,7 @@ void bx_usb_ohci_c::remove_device(Bit8u port)
 
 void bx_usb_ohci_c::update_irq()
 {
-  bx_bool level = 0;
+  bool level = 0;
 
   if ((BX_OHCI_THIS hub.op_regs.HcInterruptEnable & OHCI_INTR_MIE) &&
       (BX_OHCI_THIS hub.op_regs.HcInterruptStatus & BX_OHCI_THIS hub.op_regs.HcInterruptEnable)) {
@@ -531,7 +532,7 @@ void bx_usb_ohci_c::set_interrupt(Bit32u value)
   update_irq();
 }
 
-bx_bool bx_usb_ohci_c::read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+bool bx_usb_ohci_c::read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
   Bit32u val = 0x0;
   int p = 0;
@@ -712,7 +713,7 @@ bx_bool bx_usb_ohci_c::read_handler(bx_phy_address addr, unsigned len, void *dat
   return 1;
 }
 
-bx_bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
   Bit32u value = *((Bit32u *) data);
   Bit32u  offset = (Bit32u)addr - BX_OHCI_THIS pci_bar[0].addr;
@@ -1140,10 +1141,10 @@ void bx_usb_ohci_c::process_lists(void)
   }
 }
 
-bx_bool bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
+bool bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
 {
   struct OHCI_TD cur_td;
-  bx_bool ret = 0;
+  bool ret = 0;
 
   if (!ED_GET_H(ed) && !ED_GET_K(ed) && (ED_GET_HEADP(ed) != ED_GET_TAILP(ed))) {
     // if the isochronous is enabled and ed is a isochronous, do TD
@@ -1213,14 +1214,14 @@ void bx_usb_ohci_c::event_handler(int event, USBPacket *packet, int port)
   }
 }
 
-bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
+bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
 {
   unsigned pid = 0, len = 0, len1, len2;
   int ilen, ret = 0, ret2 = 1;
   Bit32u addr;
   Bit16u maxlen = 0;
   USBAsync *p;
-  bx_bool completion;
+  bool completion;
 
   addr = ED_GET_HEADP(ed);
   p = find_async_packet(&packets, addr);
@@ -1460,10 +1461,10 @@ void bx_usb_ohci_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_l
   }
 }
 
-void bx_usb_ohci_c::usb_set_connect_status(Bit8u port, int type, bx_bool connected)
+void bx_usb_ohci_c::usb_set_connect_status(Bit8u port, int type, bool connected)
 {
-  const bx_bool ccs_org = BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.ccs;
-  const bx_bool pes_org = BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.pes;
+  const bool ccs_org = BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.ccs;
+  const bool pes_org = BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.pes;
 
   usb_device_c *device = BX_OHCI_THIS hub.usb_port[port].device;
   if (device != NULL) {
@@ -1517,7 +1518,7 @@ const char *bx_usb_ohci_c::usb_param_handler(bx_param_string_c *param, int set, 
 {
   if (set) {
     int portnum = atoi((param->get_parent())->get_name()+4) - 1;
-    bx_bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
+    bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
     if ((portnum >= 0) && (portnum < USB_OHCI_PORTS)) {
       if (empty && BX_OHCI_THIS hub.usb_port[portnum].HcRhPortStatus.ccs) {
         BX_OHCI_THIS hub.device_change |= (1 << portnum);

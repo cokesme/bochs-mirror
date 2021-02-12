@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32paramdlg.cc 13461 2018-02-05 21:08:43Z vruppert $
+// $Id: win32paramdlg.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009-2018  Volker Ruppert
+//  Copyright (C) 2009-2021  Volker Ruppert
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -19,11 +19,12 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 #include "win32dialog.h"
+#include "bochs.h"
+#include "siminterface.h"
+#include "win32res.h"
 
 #if BX_USE_WIN32CONFIG
 
-#include "bochs.h"
-#include "win32res.h"
 #include "scrollwin.h"
 
 #define ID_LABEL 1000
@@ -59,7 +60,7 @@ UINT  nextDlgID;
 dlg_list_t *dlg_lists = NULL;
 
 
-bx_bool registerDlgList(UINT lid, bx_list_c *list)
+UINT registerDlgList(UINT lid, bx_list_c *list)
 {
   dlg_list_t *dlg_list = new dlg_list_t;
   dlg_list->list = list;
@@ -835,7 +836,7 @@ void SetParamList(HWND hDlg, bx_list_c *list)
             bx_param_num_c *nparam = (bx_param_num_c*)param;
             if (nparam->get_base() == BASE_HEX) {
               GetWindowText(GetDlgItem(hDlg, ID_PARAM + cid), buffer, 511);
-              sscanf(buffer, "%x", &val);
+              sscanf(buffer, "%llx", &val);
             } else {
               GetWindowText(GetDlgItem(hDlg, ID_PARAM + cid), buffer, 511);
               val = strtoll(buffer, NULL, 10);

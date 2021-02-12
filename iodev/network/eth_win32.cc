@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_win32.cc 13648 2019-12-08 18:14:30Z vruppert $
+// $Id: eth_win32.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2019  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -42,17 +42,14 @@
 
 #if BX_NETWORKING && BX_NETMOD_WIN32
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libwin32_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(win32)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libwin32_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation

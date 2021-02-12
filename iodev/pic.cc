@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pic.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: pic.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -31,21 +31,22 @@
 
 bx_pic_c *thePic = NULL;
 
-int CDECL libpic_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(pic)
 {
-  if (type == PLUGTYPE_CORE) {
-    thePic = new bx_pic_c();
-    bx_devices.pluginPicDevice = thePic;
-    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePic, BX_PLUGIN_PIC);
-    return 0; // Success
+  if (mode == PLUGIN_INIT) {
+    if (type == PLUGTYPE_CORE) {
+      thePic = new bx_pic_c();
+      bx_devices.pluginPicDevice = thePic;
+      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePic, BX_PLUGIN_PIC);
+    } else {
+      return -1;
+    }
+  } else if (mode == PLUGIN_FINI) {
+    delete thePic;
   } else {
-    return -1;
+    return (int)PLUGTYPE_CORE;
   }
-}
-
-void CDECL libpic_LTX_plugin_fini(void)
-{
-  delete thePic;
+  return 0; // Success
 }
 
 bx_pic_c::bx_pic_c(void)
@@ -142,14 +143,14 @@ void bx_pic_c::register_state(void)
   new bx_shadow_num_c(ctrl, "read_reg_select", &BX_PIC_THIS s.master_pic.read_reg_select);
   new bx_shadow_num_c(ctrl, "irq", &BX_PIC_THIS s.master_pic.irq, BASE_HEX);
   new bx_shadow_num_c(ctrl, "lowest_priority", &BX_PIC_THIS s.master_pic.lowest_priority, BASE_HEX);
-  new bx_shadow_bool_c(ctrl, "INT", &BX_PIC_THIS s.master_pic.INT);
+  BXRS_PARAM_BOOL(ctrl, INT, BX_PIC_THIS s.master_pic.INT);
   new bx_shadow_num_c(ctrl, "IRQ_in", &BX_PIC_THIS s.master_pic.IRQ_in, BASE_HEX);
-  new bx_shadow_bool_c(ctrl, "in_init", &BX_PIC_THIS s.master_pic.init.in_init);
-  new bx_shadow_bool_c(ctrl, "requires_4", &BX_PIC_THIS s.master_pic.init.requires_4);
+  BXRS_PARAM_BOOL(ctrl, in_init, BX_PIC_THIS s.master_pic.init.in_init);
+  BXRS_PARAM_BOOL(ctrl, requires_4, BX_PIC_THIS s.master_pic.init.requires_4);
   new bx_shadow_num_c(ctrl, "byte_expected", &BX_PIC_THIS s.master_pic.init.byte_expected);
-  new bx_shadow_bool_c(ctrl, "special_mask", &BX_PIC_THIS s.master_pic.special_mask);
-  new bx_shadow_bool_c(ctrl, "polled", &BX_PIC_THIS s.master_pic.polled);
-  new bx_shadow_bool_c(ctrl, "rotate_on_autoeoi", &BX_PIC_THIS s.master_pic.rotate_on_autoeoi);
+  BXRS_PARAM_BOOL(ctrl, special_mask, BX_PIC_THIS s.master_pic.special_mask);
+  BXRS_PARAM_BOOL(ctrl, polled, BX_PIC_THIS s.master_pic.polled);
+  BXRS_PARAM_BOOL(ctrl, rotate_on_autoeoi, BX_PIC_THIS s.master_pic.rotate_on_autoeoi);
   new bx_shadow_num_c(ctrl, "edge_level", &BX_PIC_THIS s.master_pic.edge_level, BASE_HEX);
   ctrl = new bx_list_c(list, "slave");
   new bx_shadow_num_c(ctrl, "interrupt_offset", &BX_PIC_THIS s.slave_pic.interrupt_offset, BASE_HEX);
@@ -160,14 +161,14 @@ void bx_pic_c::register_state(void)
   new bx_shadow_num_c(ctrl, "read_reg_select", &BX_PIC_THIS s.slave_pic.read_reg_select);
   new bx_shadow_num_c(ctrl, "irq", &BX_PIC_THIS s.slave_pic.irq, BASE_HEX);
   new bx_shadow_num_c(ctrl, "lowest_priority", &BX_PIC_THIS s.slave_pic.lowest_priority, BASE_HEX);
-  new bx_shadow_bool_c(ctrl, "INT", &BX_PIC_THIS s.slave_pic.INT);
+  BXRS_PARAM_BOOL(ctrl, INT, BX_PIC_THIS s.slave_pic.INT);
   new bx_shadow_num_c(ctrl, "IRQ_in", &BX_PIC_THIS s.slave_pic.IRQ_in, BASE_HEX);
-  new bx_shadow_bool_c(ctrl, "in_init", &BX_PIC_THIS s.slave_pic.init.in_init);
-  new bx_shadow_bool_c(ctrl, "requires_4", &BX_PIC_THIS s.slave_pic.init.requires_4);
+  BXRS_PARAM_BOOL(ctrl, in_init, BX_PIC_THIS s.slave_pic.init.in_init);
+  BXRS_PARAM_BOOL(ctrl, requires_4, BX_PIC_THIS s.slave_pic.init.requires_4);
   new bx_shadow_num_c(ctrl, "byte_expected", &BX_PIC_THIS s.slave_pic.init.byte_expected);
-  new bx_shadow_bool_c(ctrl, "special_mask", &BX_PIC_THIS s.slave_pic.special_mask);
-  new bx_shadow_bool_c(ctrl, "polled", &BX_PIC_THIS s.slave_pic.polled);
-  new bx_shadow_bool_c(ctrl, "rotate_on_autoeoi", &BX_PIC_THIS s.slave_pic.rotate_on_autoeoi);
+  BXRS_PARAM_BOOL(ctrl, special_mask, BX_PIC_THIS s.slave_pic.special_mask);
+  BXRS_PARAM_BOOL(ctrl, polled, BX_PIC_THIS s.slave_pic.polled);
+  BXRS_PARAM_BOOL(ctrl, rotate_on_autoeoi, BX_PIC_THIS s.slave_pic.rotate_on_autoeoi);
   new bx_shadow_num_c(ctrl, "edge_level", &BX_PIC_THIS s.slave_pic.edge_level, BASE_HEX);
 }
 
@@ -662,7 +663,7 @@ void bx_pic_c::raise_irq(unsigned irq_no)
   }
 }
 
-void bx_pic_c::set_mode(bx_bool ma_sl, Bit8u mode)
+void bx_pic_c::set_mode(bool ma_sl, Bit8u mode)
 {
   if (ma_sl) {
     BX_PIC_THIS s.master_pic.edge_level = mode;

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32dialog.cc 13438 2018-01-19 20:27:04Z sshwarts $
+// $Id: win32dialog.cc 14115 2021-01-31 15:22:58Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2003-2017  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -19,14 +19,15 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 #include "win32dialog.h"
-
-#if BX_USE_WIN32CONFIG
-
 #include "bochs.h"
+#include "bx_debug/debug.h"
 #include "param_names.h"
+#include "gui.h"
 #include "win32res.h"
 #include "win32paramdlg.h"
 #include "textconfig.h"
+
+#if BX_USE_WIN32CONFIG
 
 const char log_choices[N_ACT+1][16] = {"ignore", "log", "warn user", "ask user", "end simulation", "no change"};
 
@@ -349,7 +350,7 @@ static BOOL CALLBACK LogOptDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
   return FALSE;
 }
 
-void LogOptionsDialog(HWND hwnd, bx_bool runtime)
+void LogOptionsDialog(HWND hwnd, bool runtime)
 {
   DialogBoxParam(NULL, MAKEINTRESOURCE(LOGOPT_DLG), hwnd, (DLGPROC)LogOptDlgProc, (LPARAM)runtime);
 }
@@ -359,6 +360,7 @@ static BOOL CALLBACK PluginCtrlDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARA
   int count, i;
   long code;
   bx_list_c *plugin_ctrl;
+  bx_param_bool_c *plugin;
   char plugname[20], message[80];
 
   switch (msg) {
@@ -366,7 +368,12 @@ static BOOL CALLBACK PluginCtrlDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARA
       plugin_ctrl = (bx_list_c*) SIM->get_param(BXPN_PLUGIN_CTRL);
       count = plugin_ctrl->get_size();
       for (i = 0; i < count; i++) {
-        SendMessage(GetDlgItem(hDlg, IDPLUGLIST), LB_ADDSTRING, 0, (LPARAM)plugin_ctrl->get(i)->get_name());
+        plugin = (bx_param_bool_c*)plugin_ctrl->get(i);
+        if (plugin->get()) {
+          SendMessage(GetDlgItem(hDlg, IDPLUGLIST2), LB_ADDSTRING, 0, (LPARAM)plugin->get_name());
+        } else {
+          SendMessage(GetDlgItem(hDlg, IDPLUGLIST1), LB_ADDSTRING, 0, (LPARAM)plugin->get_name());
+        }
       }
       EnableWindow(GetDlgItem(hDlg, IDLOAD), FALSE);
       EnableWindow(GetDlgItem(hDlg, IDUNLOAD), FALSE);
@@ -377,32 +384,39 @@ static BOOL CALLBACK PluginCtrlDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARA
     case WM_COMMAND:
       code = HIWORD(wParam);
       switch (LOWORD(wParam)) {
-        case IDPLUGLIST:
+        case IDPLUGLIST1:
           if (code == LBN_SELCHANGE) {
+            SendMessage(GetDlgItem(hDlg, IDPLUGLIST2), LB_SETCURSEL, -1, 0);
+            EnableWindow(GetDlgItem(hDlg, IDLOAD), TRUE);
+            EnableWindow(GetDlgItem(hDlg, IDUNLOAD), FALSE);
+          }
+          break;
+        case IDPLUGLIST2:
+          if (code == LBN_SELCHANGE) {
+            SendMessage(GetDlgItem(hDlg, IDPLUGLIST1), LB_SETCURSEL, -1, 0);
+            EnableWindow(GetDlgItem(hDlg, IDLOAD), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDUNLOAD), TRUE);
           }
           break;
-        case IDEDIT:
-          if (code == EN_CHANGE) {
-            i = GetWindowTextLength(GetDlgItem(hDlg, IDEDIT));
-            EnableWindow(GetDlgItem(hDlg, IDLOAD), i > 0);
-          }
-          break;
         case IDLOAD:
-          GetDlgItemText(hDlg, IDEDIT, plugname, 18);
+          i = SendMessage(GetDlgItem(hDlg, IDPLUGLIST1), LB_GETCURSEL, 0, 0);
+          SendMessage(GetDlgItem(hDlg, IDPLUGLIST1), LB_GETTEXT, i, (LPARAM)plugname);
           if (SIM->opt_plugin_ctrl(plugname, 1)) {
             wsprintf(message, "Plugin '%s' loaded", plugname);
             MessageBox(hDlg, message, "Plugin Control", MB_ICONINFORMATION);
-            SendMessage(GetDlgItem(hDlg, IDPLUGLIST), LB_ADDSTRING, 0, (LPARAM)plugname);
+            SendMessage(GetDlgItem(hDlg, IDPLUGLIST1), LB_DELETESTRING, i, 0);
+            SendMessage(GetDlgItem(hDlg, IDPLUGLIST2), LB_ADDSTRING, 0, (LPARAM)plugname);
+            EnableWindow(GetDlgItem(hDlg, IDLOAD), FALSE);
           }
           break;
         case IDUNLOAD:
-          i = SendMessage(GetDlgItem(hDlg, IDPLUGLIST), LB_GETCURSEL, 0, 0);
-          SendMessage(GetDlgItem(hDlg, IDPLUGLIST), LB_GETTEXT, i, (LPARAM)plugname);
+          i = SendMessage(GetDlgItem(hDlg, IDPLUGLIST2), LB_GETCURSEL, 0, 0);
+          SendMessage(GetDlgItem(hDlg, IDPLUGLIST2), LB_GETTEXT, i, (LPARAM)plugname);
           if (SIM->opt_plugin_ctrl(plugname, 0)) {
             wsprintf(message, "Plugin '%s' unloaded", plugname);
             MessageBox(hDlg, message, "Plugin Control", MB_ICONINFORMATION);
-            SendMessage(GetDlgItem(hDlg, IDPLUGLIST), LB_DELETESTRING, i, 0);
+            SendMessage(GetDlgItem(hDlg, IDPLUGLIST1), LB_ADDSTRING, 0, (LPARAM)plugname);
+            SendMessage(GetDlgItem(hDlg, IDPLUGLIST2), LB_DELETESTRING, i, 0);
             EnableWindow(GetDlgItem(hDlg, IDUNLOAD), FALSE);
           }
           break;
@@ -458,7 +472,7 @@ edit_opts_t runtime_options[] = {
 };
 static BOOL CALLBACK MainMenuDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-  static bx_bool runtime;
+  static bool runtime;
   int choice, code, i;
   bx_param_filename_c *rcfile;
   char path[BX_PATHNAME_LEN];
@@ -466,7 +480,7 @@ static BOOL CALLBACK MainMenuDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
 
   switch (msg) {
     case WM_INITDIALOG:
-      runtime = (bx_bool)lParam;
+      runtime = (bool)lParam;
       EnableWindow(GetDlgItem(hDlg, IDEDITCFG), FALSE);
       if (runtime) {
         SetWindowText(hDlg, "Bochs Runtime Menu");
@@ -602,7 +616,7 @@ int AskString(bx_param_string_c *param)
                         (DLGPROC)StringParamProc, (LPARAM)param);
 }
 
-int MainMenuDialog(HWND hwnd, bx_bool runtime)
+int MainMenuDialog(HWND hwnd, bool runtime)
 {
   return (int) DialogBoxParam(NULL, MAKEINTRESOURCE(MAINMENU_DLG), hwnd,
                         (DLGPROC)MainMenuDlgProc, (LPARAM)runtime);
@@ -620,6 +634,9 @@ BxEvent* win32_notify_callback(void *unused, BxEvent *event)
   {
     case BX_SYNC_EVT_LOG_DLG:
       LogAskDialog(event);
+      return event;
+    case BX_SYNC_EVT_MSG_BOX:
+      MessageBox(GetBochsWindow(), event->u.logmsg.msg, event->u.logmsg.prefix, MB_ICONERROR);
       return event;
     case BX_SYNC_EVT_ASK_PARAM:
       param = event->u.param.param;

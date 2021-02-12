@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: main.cc 13759 2020-01-02 16:19:02Z vruppert $
+// $Id: main.cc 14129 2021-02-06 16:51:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2020  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,13 @@
 #endif
 #include "cpu/cpu.h"
 #include "iodev/iodev.h"
+#include "iodev/hdimage/hdimage.h"
+#if BX_NETWORKING
+#include "iodev/network/netmod.h"
+#endif
+#if BX_SUPPORT_SOUNDLOW
+#include "iodev/sound/soundmod.h"
+#endif
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -55,22 +62,23 @@ extern "C" {
 }
 
 #if BX_GUI_SIGHANDLER
-bx_bool bx_gui_sighandler = 0;
+bool bx_gui_sighandler = 0;
 #endif
 
 int  bx_init_main(int argc, char *argv[]);
 void bx_init_hardware(void);
+void bx_plugin_ctrl_reset(bool init_done);
 void bx_init_options(void);
 void bx_init_bx_dbg(void);
 
 static const char *divider = "========================================================================";
 
 bx_startup_flags_t bx_startup_flags;
-bx_bool bx_user_quit;
+bool bx_user_quit;
 Bit8u bx_cpu_count;
 #if BX_SUPPORT_APIC
 Bit32u apic_id_mask; // determinted by XAPIC option
-bx_bool simulate_xapic;
+bool simulate_xapic;
 #endif
 
 /* typedefs */
@@ -199,7 +207,7 @@ static void carbonFatalDialog(const char *error, const char *exposition)
 #endif
 
 #if BX_DEBUGGER
-void print_tree(bx_param_c *node, int level, bx_bool xml)
+void print_tree(bx_param_c *node, int level, bool xml)
 {
   int i;
   char tmpstr[BX_PATHNAME_LEN];
@@ -356,6 +364,7 @@ int bxmain(void)
     fgets(buf, sizeof(buf), stdin);
   }
 #endif
+  plugin_cleanup();
   BX_INSTR_EXIT_ENV();
   return SIM->get_exit_code();
 }
@@ -394,7 +403,7 @@ int split_string_into_argv(char *string, int *argc_out, char **argv, int max_arg
   }
   if (last_nonspace != buf) *(last_nonspace+1) = 0;
   p = buf;
-  bx_bool done = false;
+  bool done = false;
   while (!done) {
     //fprintf (stderr, "parsing '%c' with singlequote=%d, dblquote=%d\n", *p, in_single_quote, in_double_quote);
     switch (*p) {
@@ -457,7 +466,7 @@ int split_string_into_argv(char *string, int *argc_out, char **argv, int max_arg
 int RedirectIOToConsole()
 {
   int hConHandle;
-  long lStdHandle;
+  Bit64s lStdHandle;
   FILE *fp;
   // allocate a console for this app
   FreeConsole();
@@ -466,20 +475,20 @@ int RedirectIOToConsole()
     return 0;
   }
   // redirect unbuffered STDOUT to the console
-  lStdHandle = (long)GetStdHandle(STD_OUTPUT_HANDLE);
-  hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+  lStdHandle = (Bit64s)GetStdHandle(STD_OUTPUT_HANDLE);
+  hConHandle = _open_osfhandle((long)lStdHandle, _O_TEXT);
   fp = _fdopen(hConHandle, "w");
   *stdout = *fp;
   setvbuf(stdout, NULL, _IONBF, 0);
   // redirect unbuffered STDIN to the console
-  lStdHandle = (long)GetStdHandle(STD_INPUT_HANDLE);
-  hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+  lStdHandle = (Bit64s)GetStdHandle(STD_INPUT_HANDLE);
+  hConHandle = _open_osfhandle((long)lStdHandle, _O_TEXT);
   fp = _fdopen(hConHandle, "r");
   *stdin = *fp;
   setvbuf(stdin, NULL, _IONBF, 0);
   // redirect unbuffered STDERR to the console
-  lStdHandle = (long)GetStdHandle(STD_ERROR_HANDLE);
-  hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+  lStdHandle = (Bit64s)GetStdHandle(STD_ERROR_HANDLE);
+  hConHandle = _open_osfhandle((long)lStdHandle, _O_TEXT);
   fp = _fdopen(hConHandle, "w");
   *stderr = *fp;
   setvbuf(stderr, NULL, _IONBF, 0);
@@ -504,7 +513,7 @@ int WINAPI WinMain(
   bx_startup_flags.argv = (char**) malloc (max_argv * sizeof (char*));
   split_string_into_argv(m_lpCmdLine, &bx_startup_flags.argc, bx_startup_flags.argv, max_argv);
   int arg = 1;
-  bx_bool bx_noconsole = 0;
+  bool bx_noconsole = 0;
   while (arg < bx_startup_flags.argc) {
     if (!strcmp("-noconsole", bx_startup_flags.argv[arg])) {
       bx_noconsole = 1;
@@ -532,7 +541,7 @@ int CDECL main(int argc, char *argv[])
   bx_startup_flags.argv = argv;
 #ifdef WIN32
   int arg = 1;
-  bx_bool bx_noconsole = 0;
+  bool bx_noconsole = 0;
   while (arg < argc) {
     if (!strcmp("-noconsole", argv[arg])) {
       bx_noconsole = 1;
@@ -564,9 +573,9 @@ void print_usage(void)
     "  -n               no configuration file\n"
     "  -f configfile    specify configuration file\n"
     "  -q               quick start (skip configuration interface)\n"
-    "  -benchmark N     run bochs in benchmark mode for N millions of emulated ticks\n"
+    "  -benchmark N     run Bochs in benchmark mode for N millions of emulated ticks\n"
 #if BX_ENABLE_STATISTICS
-    "  -dumpstats N     dump bochs stats every N millions of emulated ticks\n"
+    "  -dumpstats N     dump Bochs stats every N millions of emulated ticks\n"
 #endif
     "  -r path          restore the Bochs state from path\n"
     "  -log filename    specify Bochs log file name\n"
@@ -607,6 +616,21 @@ int bx_init_main(int argc, char *argv[])
   // initalization must be done early because some destructors expect
   // the bochs config options to exist by the time they are called.
   bx_init_bx_dbg();
+
+#if BX_PLUGINS && BX_HAVE_GETENV && BX_HAVE_SETENV
+  // set a default plugin path, in case the user did not specify one
+  if (getenv("LTDL_LIBRARY_PATH") != NULL) {
+    BX_INFO(("LTDL_LIBRARY_PATH is set to '%s'", getenv("LTDL_LIBRARY_PATH")));
+  } else {
+    BX_INFO(("LTDL_LIBRARY_PATH not set. using compile time default '%s'",
+        BX_PLUGIN_PATH));
+    setenv("LTDL_LIBRARY_PATH", BX_PLUGIN_PATH, 1);
+  }
+#endif
+  // initialize plugin system. This must happen before we attempt to
+  // load any modules.
+  plugin_startup();
+
   bx_init_options();
 
   bx_print_header();
@@ -805,9 +829,7 @@ int bx_init_main(int argc, char *argv[])
     CFRelease(bxshareDir);
   }
 #endif
-#if BX_PLUGINS
-  // set a default plugin path, in case the user did not specify one
-#if BX_WITH_CARBON
+#if BX_PLUGINS && BX_WITH_CARBON
   // if there is no stdin, then we must create our own LTDL_LIBRARY_PATH.
   // also if there is no LTDL_LIBRARY_PATH, but we have a bundle since we're here
   // This is here so that it is available whenever --with-carbon is defined but
@@ -841,16 +863,7 @@ int bx_init_main(int argc, char *argv[])
     BX_INFO(("now my LTDL_LIBRARY_PATH is %s", getenv("LTDL_LIBRARY_PATH")));
     CFRelease(libDir);
   }
-#elif BX_HAVE_GETENV && BX_HAVE_SETENV
-  if (getenv("LTDL_LIBRARY_PATH") != NULL) {
-    BX_INFO(("LTDL_LIBRARY_PATH is set to '%s'", getenv("LTDL_LIBRARY_PATH")));
-  } else {
-    BX_INFO(("LTDL_LIBRARY_PATH not set. using compile time default '%s'",
-        BX_PLUGIN_PATH));
-    setenv("LTDL_LIBRARY_PATH", BX_PLUGIN_PATH, 1);
-  }
-#endif
-#endif  /* if BX_PLUGINS */
+#endif  /* if BX_PLUGINS && BX_WITH_CARBON */
 #if BX_HAVE_GETENV && BX_HAVE_SETENV
   if (getenv("BXSHARE") != NULL) {
     BX_INFO(("BXSHARE is set to '%s'", getenv("BXSHARE")));
@@ -869,18 +882,15 @@ int bx_init_main(int argc, char *argv[])
   // we don't have getenv or setenv.  Do nothing.
 #endif
 
-  // initialize plugin system. This must happen before we attempt to
-  // load any modules.
-  plugin_startup();
-
   int norcfile = 1;
 
   if (SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
     load_rcfile = 0;
     norcfile = 0;
+  } else {
+    // set up and load pre-defined optional plugins before parsing configuration
+    bx_plugin_ctrl_reset(0);
   }
-  // load pre-defined optional plugins before parsing configuration
-  SIM->opt_plugin_ctrl("*", 1);
   SIM->init_save_restore();
   SIM->init_statistics();
   if (load_rcfile) {
@@ -931,13 +941,13 @@ int bx_init_main(int argc, char *argv[])
   return 0;
 }
 
-bx_bool load_and_init_display_lib(void)
+bool load_and_init_display_lib(void)
 {
   if (bx_gui != NULL) {
     // bx_gui has already been filled in.  This happens when you start
     // the simulation for the second time.
     // Also, if you load wxWidgets as the configuration interface.  Its
-    // plugin_init will install wxWidgets as the bx_gui.
+    // plugin_entry() will install wxWidgets as the bx_gui.
     return 1;
   }
   BX_ASSERT(bx_gui == NULL);
@@ -1017,19 +1027,12 @@ int bx_begin_simulation(int argc, char *argv[])
 
   bx_init_hardware();
 
-#if BX_LOAD32BITOSHACK
-  if (SIM->get_param_enum(BXPN_LOAD32BITOS_WHICH)->get()) {
-    void bx_load32bitOSimagehack(void);
-    bx_load32bitOSimagehack();
-  }
-#endif
-
   SIM->set_init_done(1);
 
   // update headerbar buttons since drive status can change during init
   bx_gui->update_drive_status_buttons();
 
-  // iniialize statusbar and set all items inactive
+  // initialize statusbar and set all items inactive
   if (!SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
     bx_gui->statusbar_setitem(-1, 0);
   } else {
@@ -1137,7 +1140,7 @@ void bx_sr_after_restore_state(void)
   DEV_after_restore_state();
 }
 
-void bx_set_log_actions_by_device(bx_bool panic_flag)
+void bx_set_log_actions_by_device(bool panic_flag)
 {
   int id, l, m, val;
   bx_list_c *loglev, *level;
@@ -1217,36 +1220,36 @@ void bx_init_hardware()
 #endif
     BX_INFO(("  FPU support: %s", BX_SUPPORT_FPU?"yes":"no"));
 #if BX_CPU_LEVEL >= 5
-    bx_bool mmx_enabled = SIM->get_param_bool(BXPN_CPUID_MMX)->get();
+    bool mmx_enabled = SIM->get_param_bool(BXPN_CPUID_MMX)->get();
     BX_INFO(("  MMX support: %s", mmx_enabled?"yes":"no"));
     BX_INFO(("  3dnow! support: %s", BX_SUPPORT_3DNOW?"yes":"no"));
 #endif
 #if BX_CPU_LEVEL >= 6
-    bx_bool sep_enabled = SIM->get_param_bool(BXPN_CPUID_SEP)->get();
+    bool sep_enabled = SIM->get_param_bool(BXPN_CPUID_SEP)->get();
     BX_INFO(("  SEP support: %s", sep_enabled?"yes":"no"));
     BX_INFO(("  SIMD support: %s", SIM->get_param_enum(BXPN_CPUID_SIMD)->get_selected()));
-    bx_bool xsave_enabled = SIM->get_param_bool(BXPN_CPUID_XSAVE)->get();
-    bx_bool xsaveopt_enabled = SIM->get_param_bool(BXPN_CPUID_XSAVEOPT)->get();
+    bool xsave_enabled = SIM->get_param_bool(BXPN_CPUID_XSAVE)->get();
+    bool xsaveopt_enabled = SIM->get_param_bool(BXPN_CPUID_XSAVEOPT)->get();
     BX_INFO(("  XSAVE support: %s %s",
       xsave_enabled?"xsave":"no", xsaveopt_enabled?"xsaveopt":""));
-    bx_bool aes_enabled = SIM->get_param_bool(BXPN_CPUID_AES)->get();
+    bool aes_enabled = SIM->get_param_bool(BXPN_CPUID_AES)->get();
     BX_INFO(("  AES support: %s", aes_enabled?"yes":"no"));
-    bx_bool sha_enabled = SIM->get_param_bool(BXPN_CPUID_SHA)->get();
+    bool sha_enabled = SIM->get_param_bool(BXPN_CPUID_SHA)->get();
     BX_INFO(("  SHA support: %s", sha_enabled?"yes":"no"));
-    bx_bool movbe_enabled = SIM->get_param_bool(BXPN_CPUID_MOVBE)->get();
+    bool movbe_enabled = SIM->get_param_bool(BXPN_CPUID_MOVBE)->get();
     BX_INFO(("  MOVBE support: %s", movbe_enabled?"yes":"no"));
-    bx_bool adx_enabled = SIM->get_param_bool(BXPN_CPUID_ADX)->get();
+    bool adx_enabled = SIM->get_param_bool(BXPN_CPUID_ADX)->get();
     BX_INFO(("  ADX support: %s", adx_enabled?"yes":"no"));
 #if BX_SUPPORT_X86_64
-    bx_bool x86_64_enabled = SIM->get_param_bool(BXPN_CPUID_X86_64)->get();
+    bool x86_64_enabled = SIM->get_param_bool(BXPN_CPUID_X86_64)->get();
     BX_INFO(("  x86-64 support: %s", x86_64_enabled?"yes":"no"));
-    bx_bool xlarge_enabled = SIM->get_param_bool(BXPN_CPUID_1G_PAGES)->get();
+    bool xlarge_enabled = SIM->get_param_bool(BXPN_CPUID_1G_PAGES)->get();
     BX_INFO(("  1G paging support: %s", xlarge_enabled?"yes":"no"));
 #else
     BX_INFO(("  x86-64 support: no"));
 #endif
 #if BX_SUPPORT_MONITOR_MWAIT
-    bx_bool mwait_enabled = SIM->get_param_bool(BXPN_CPUID_MWAIT)->get();
+    bool mwait_enabled = SIM->get_param_bool(BXPN_CPUID_MWAIT)->get();
     BX_INFO(("  MWAIT support: %s", mwait_enabled?"yes":"no"));
 #endif
 #if BX_SUPPORT_VMX
@@ -1259,7 +1262,7 @@ void bx_init_hardware()
     }
 #endif
 #if BX_SUPPORT_SVM
-    bx_bool svm_enabled = SIM->get_param_bool(BXPN_CPUID_SVM)->get();
+    bool svm_enabled = SIM->get_param_bool(BXPN_CPUID_SVM)->get();
     BX_INFO(("  SVM support: %s", svm_enabled?"yes":"no"));
 #endif
 #endif // BX_CPU_LEVEL >= 6
@@ -1275,8 +1278,8 @@ void bx_init_hardware()
   BX_INFO(("  Handlers Chaining speedups: %s", BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS?"yes":"no"));
   BX_INFO(("Devices configuration"));
   BX_INFO(("  PCI support: %s", BX_SUPPORT_PCI?"i440FX i430FX i440BX":"no"));
-#if BX_SUPPORT_NE2K || BX_SUPPORT_E1000
-  BX_INFO(("  Networking support:%s%s",
+#if BX_NETWORKING
+  BX_INFO(("  Network devices support:%s%s",
            BX_SUPPORT_NE2K?" NE2000":"", BX_SUPPORT_E1000?" E1000":""));
 #else
   BX_INFO(("  Networking: no"));
@@ -1296,7 +1299,13 @@ void bx_init_hardware()
 #endif
   BX_INFO(("  VGA extension support: vbe%s%s",
            BX_SUPPORT_CLGD54XX?" cirrus":"", BX_SUPPORT_VOODOO?" voodoo":""));
-
+  bx_hdimage_ctl.list_modules();
+#if BX_NETWORKING
+  bx_netmod_ctl.list_modules();
+#endif
+#if BX_SUPPORT_SOUNDLOW
+  bx_soundmod_ctl.list_modules();
+#endif
   // Check if there is a romimage
   if (SIM->get_param_string(BXPN_ROM_PATH)->isempty()) {
     BX_ERROR(("No romimage to load. Is your bochsrc file loaded/valid ?"));

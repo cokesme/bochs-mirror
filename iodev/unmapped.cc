@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: unmapped.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: unmapped.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -31,16 +31,17 @@
 
 bx_unmapped_c *theUnmappedDevice = NULL;
 
-int CDECL libunmapped_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(unmapped)
 {
-  theUnmappedDevice = new bx_unmapped_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUnmappedDevice, BX_PLUGIN_UNMAPPED);
+  if (mode == PLUGIN_INIT) {
+    theUnmappedDevice = new bx_unmapped_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUnmappedDevice, BX_PLUGIN_UNMAPPED);
+  } else if (mode == PLUGIN_FINI) {
+    delete theUnmappedDevice;
+  } else {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libunmapped_LTX_plugin_fini(void)
-{
-  delete theUnmappedDevice;
 }
 
 bx_unmapped_c::bx_unmapped_c(void)

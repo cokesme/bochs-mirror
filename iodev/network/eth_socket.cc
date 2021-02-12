@@ -1,9 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_socket.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: eth_socket.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2003  by Mariusz Matuszek [NOmrmmSPAM @ users.sourceforge.net]
-//  Copyright (C) 2017  The Bochs Project
+//  Copyright (C) 2003       by Mariusz Matuszek
+//                              [NOmrmmSPAM @ users.sourceforge.net]
+//  Copyright (C) 2017-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -61,17 +62,14 @@
 
 #if BX_NETWORKING && BX_NETMOD_SOCKET
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libsocket_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(socket)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libsocket_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -95,7 +93,9 @@ extern "C" {
 #include <netinet/in.h>
 #include <net/ethernet.h>
 #include <net/if.h>
+#ifdef __linux__
 #include <linux/types.h>
+#endif
 #include <netdb.h>
 #define closesocket(s) close(s)
 typedef int SOCKET;
@@ -104,6 +104,10 @@ typedef int SOCKET;
 #endif
 #endif
 };
+
+#ifdef __APPLE__
+#define MSG_NOSIGNAL 0
+#endif
 
 #ifdef WIN32
 #define MSG_NOSIGNAL 0

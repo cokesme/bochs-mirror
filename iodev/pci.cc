@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci.cc 13515 2018-05-21 16:11:46Z vruppert $
+// $Id: pci.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2018  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -40,20 +40,21 @@ const char csname[3][20] = {"i430FX TSC", "i440FX PMC", "i440BX Host bridge"};
 
 bx_pci_bridge_c *thePciBridge = NULL;
 
-int CDECL libpci_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(pci)
 {
-  if (type == PLUGTYPE_CORE) {
-    thePciBridge = new bx_pci_bridge_c();
-    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePciBridge, BX_PLUGIN_PCI);
-    return 0; // Success
+  if (mode == PLUGIN_INIT) {
+    if (type == PLUGTYPE_CORE) {
+      thePciBridge = new bx_pci_bridge_c();
+      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePciBridge, BX_PLUGIN_PCI);
+    } else {
+      return -1;
+    }
+  } else if (mode == PLUGIN_FINI) {
+    delete thePciBridge;
   } else {
-    return -1;
+    return (int)PLUGTYPE_CORE;
   }
-}
-
-void CDECL libpci_LTX_plugin_fini(void)
-{
-  delete thePciBridge;
+  return 0; // Success
 }
 
 bx_pci_bridge_c::bx_pci_bridge_c()
@@ -250,8 +251,8 @@ void bx_pci_bridge_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io
   Bit8u value8, oldval;
   unsigned area;
   Bit8u drba_reg, old_dram_detect;
-  bx_bool drba_changed;
-  bx_bool attbase_changed = 0;
+  bool drba_changed;
+  bool attbase_changed = 0;
   Bit32u apsize;
 
   old_dram_detect = BX_PCI_THIS dram_detect;
@@ -423,8 +424,8 @@ void bx_pci_bridge_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io
   }
 }
 
-bx_bool bx_pci_bridge_c::agp_ap_read_handler(bx_phy_address addr, unsigned len,
-                                             void *data, void *param)
+bool bx_pci_bridge_c::agp_ap_read_handler(bx_phy_address addr, unsigned len,
+                                          void *data, void *param)
 {
   bx_pci_bridge_c *class_ptr = (bx_pci_bridge_c*)param;
   Bit32u value = class_ptr->agp_aperture_read(addr, len, 0);
@@ -445,7 +446,7 @@ bx_bool bx_pci_bridge_c::agp_ap_read_handler(bx_phy_address addr, unsigned len,
 }
 
 Bit32u bx_pci_bridge_c::agp_aperture_read(bx_phy_address addr, unsigned len,
-                                          bx_bool agp)
+                                          bool agp)
 {
   if (BX_PCI_THIS pci_conf[0x51] & 0x02) {
     Bit32u offset = (Bit32u)(addr - pci_bar[0].addr);
@@ -461,8 +462,8 @@ Bit32u bx_pci_bridge_c::agp_aperture_read(bx_phy_address addr, unsigned len,
   return 0;
 }
 
-bx_bool bx_pci_bridge_c::agp_ap_write_handler(bx_phy_address addr, unsigned len,
-                                              void *data, void *param)
+bool bx_pci_bridge_c::agp_ap_write_handler(bx_phy_address addr, unsigned len,
+                                           void *data, void *param)
 {
   bx_pci_bridge_c *class_ptr = (bx_pci_bridge_c*)param;
   Bit32u value = *(Bit32u*)data;
@@ -471,7 +472,7 @@ bx_bool bx_pci_bridge_c::agp_ap_write_handler(bx_phy_address addr, unsigned len,
 }
 
 void bx_pci_bridge_c::agp_aperture_write(bx_phy_address addr, Bit32u value,
-                                         unsigned len, bx_bool agp)
+                                         unsigned len, bool agp)
 {
   if (BX_PCI_THIS pci_conf[0x51] & 0x02) {
     Bit32u offset = (Bit32u)(addr - pci_bar[0].addr);
@@ -533,7 +534,7 @@ void bx_pci_bridge_c::smram_control(Bit8u value8)
     bx_devices.mem->disable_smram();
   }
   else {
-    bx_bool DOPEN = (value8 & 0x40) > 0, DCLS = (value8 & 0x20) > 0;
+    bool DOPEN = (value8 & 0x40) > 0, DCLS = (value8 & 0x20) > 0;
     if(DOPEN && DCLS) BX_PANIC(("SMRAM control: DOPEN not mutually exclusive with DCLS !"));
     bx_devices.mem->enable_smram(DOPEN, DCLS);
   }

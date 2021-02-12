@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vgacore.cc 13514 2018-05-21 07:31:18Z vruppert $
+// $Id: vgacore.cc 14130 2021-02-06 19:56:57Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -102,7 +102,7 @@ void bx_vgacore_c::init(void)
                               ((BX_VGA_THIS s.max_xres % X_TILESIZE) > 0);
   BX_VGA_THIS s.num_y_tiles = BX_VGA_THIS s.max_yres / Y_TILESIZE +
                               ((BX_VGA_THIS s.max_yres % Y_TILESIZE) > 0);
-  BX_VGA_THIS s.vga_tile_updated = new bx_bool[BX_VGA_THIS s.num_x_tiles * BX_VGA_THIS s.num_y_tiles];
+  BX_VGA_THIS s.vga_tile_updated = new bool[BX_VGA_THIS s.num_x_tiles * BX_VGA_THIS s.num_y_tiles];
   for (y = 0; y < BX_VGA_THIS s.num_y_tiles; y++)
     for (x = 0; x < BX_VGA_THIS s.num_x_tiles; x++)
       SET_TILE_UPDATED(BX_VGA_THIS, x, y, 0);
@@ -162,44 +162,19 @@ void bx_vgacore_c::init_standard_vga(void)
 
 void bx_vgacore_c::init_gui(void)
 {
-  unsigned i,string_i;
-  int argc;
+  int argc, i;
   char *argv[16];
-  char *ptr;
-  char string[512];
-  size_t len;
+  const char *options;
 
   // set up display library options and start gui
   memset(argv, 0, sizeof(argv));
   argc = 1;
   argv[0] = (char *)"bochs";
-  len = strlen(SIM->get_param_string(BXPN_DISPLAYLIB_OPTIONS)->getptr());
-  if (len > 0) {
-    char *options = new char[len + 1];
-    SIM->get_param_string(BXPN_DISPLAYLIB_OPTIONS)->get(options, len + 1);
-    ptr = strtok(options, ",");
-    while (ptr && strcmp(ptr, "none")) {
-      string_i = 0;
-      for (i=0; i<strlen(ptr); i++) {
-        if (!isspace(ptr[i])) string[string_i++] = ptr[i];
-      }
-      string[string_i] = '\0';
-      if (argv[argc] != NULL) {
-        free(argv[argc]);
-        argv[argc] = NULL;
-      }
-      if (argc < 16) {
-        argv[argc++] = strdup(string);
-      } else {
-        BX_PANIC (("too many parameters, max is 16\n"));
-      }
-      ptr = strtok(NULL, ",");
-    }
-    delete [] options;
-  }
+  options = SIM->get_param_string(BXPN_DISPLAYLIB_OPTIONS)->getptr();
+  argc = SIM->split_option_list("Display library options", options, &argv[1], 15) + 1;
   bx_gui->init(argc, argv, BX_VGA_THIS s.max_xres, BX_VGA_THIS s.max_yres,
                X_TILESIZE, Y_TILESIZE);
-  for (i = 1; i < (unsigned)argc; i++) {
+  for (i = 1; i < argc; i++) {
     if (argv[i] != NULL) {
         free(argv[i]);
         argv[i] = NULL;
@@ -261,39 +236,39 @@ void bx_vgacore_c::init_systemtimer(void)
   }
 }
 
-void bx_vgacore_c::register_state(bx_list_c *parent)
+void bx_vgacore_c::vgacore_register_state(bx_list_c *parent)
 {
   char name[4];
 
   bx_list_c *list = new bx_list_c(parent, "vgacore", "VGA Core State");
   bx_list_c *misc = new bx_list_c(list, "misc_output");
-  new bx_shadow_bool_c(misc, "color_emulation", &BX_VGA_THIS s.misc_output.color_emulation);
-  new bx_shadow_bool_c(misc, "enable_ram", &BX_VGA_THIS s.misc_output.enable_ram);
+  BXRS_PARAM_BOOL(misc, color_emulation, BX_VGA_THIS s.misc_output.color_emulation);
+  BXRS_PARAM_BOOL(misc, enable_ram, BX_VGA_THIS s.misc_output.enable_ram);
   new bx_shadow_num_c(misc, "clock_select", &BX_VGA_THIS s.misc_output.clock_select);
-  new bx_shadow_bool_c(misc, "select_high_bank", &BX_VGA_THIS s.misc_output.select_high_bank);
-  new bx_shadow_bool_c(misc, "horiz_sync_pol", &BX_VGA_THIS s.misc_output.horiz_sync_pol);
-  new bx_shadow_bool_c(misc, "vert_sync_pol", &BX_VGA_THIS s.misc_output.vert_sync_pol);
+  BXRS_PARAM_BOOL(misc, select_high_bank, BX_VGA_THIS s.misc_output.select_high_bank);
+  BXRS_PARAM_BOOL(misc, horiz_sync_pol, BX_VGA_THIS s.misc_output.horiz_sync_pol);
+  BXRS_PARAM_BOOL(misc, vert_sync_pol, BX_VGA_THIS s.misc_output.vert_sync_pol);
   bx_list_c *crtc = new bx_list_c(list, "CRTC");
   new bx_shadow_num_c(crtc, "address", &BX_VGA_THIS s.CRTC.address, BASE_HEX);
   new bx_shadow_data_c(crtc, "reg", BX_VGA_THIS s.CRTC.reg, 25, 1);
-  new bx_shadow_bool_c(crtc, "write_protect", &BX_VGA_THIS s.CRTC.write_protect);
+  BXRS_PARAM_BOOL(crtc, write_protect, BX_VGA_THIS s.CRTC.write_protect);
   bx_list_c *actl = new bx_list_c(list, "attribute_ctrl");
-  new bx_shadow_bool_c(actl, "flip_flop", &BX_VGA_THIS s.attribute_ctrl.flip_flop);
+  BXRS_PARAM_BOOL(actl, flip_flop, BX_VGA_THIS s.attribute_ctrl.flip_flop);
   new bx_shadow_num_c(actl, "address", &BX_VGA_THIS s.attribute_ctrl.address, BASE_HEX);
-  new bx_shadow_bool_c(actl, "video_enabled", &BX_VGA_THIS s.attribute_ctrl.video_enabled);
+  BXRS_PARAM_BOOL(actl, video_enabled, BX_VGA_THIS s.attribute_ctrl.video_enabled);
   new bx_shadow_data_c(actl, "palette_reg", BX_VGA_THIS s.attribute_ctrl.palette_reg, 16, 1);
   new bx_shadow_num_c(actl, "overscan_color", &BX_VGA_THIS s.attribute_ctrl.overscan_color, BASE_HEX);
   new bx_shadow_num_c(actl, "color_plane_enable", &BX_VGA_THIS s.attribute_ctrl.color_plane_enable, BASE_HEX);
   new bx_shadow_num_c(actl, "horiz_pel_panning", &BX_VGA_THIS s.attribute_ctrl.horiz_pel_panning, BASE_HEX);
   new bx_shadow_num_c(actl, "color_select", &BX_VGA_THIS s.attribute_ctrl.color_select, BASE_HEX);
   bx_list_c *mode = new bx_list_c(actl, "mode_ctrl");
-  new bx_shadow_bool_c(mode, "graphics_alpha", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.graphics_alpha);
-  new bx_shadow_bool_c(mode, "display_type", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.display_type);
-  new bx_shadow_bool_c(mode, "enable_line_graphics", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.enable_line_graphics);
-  new bx_shadow_bool_c(mode, "blink_intensity", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.blink_intensity);
-  new bx_shadow_bool_c(mode, "pixel_panning_compat", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.pixel_panning_compat);
-  new bx_shadow_bool_c(mode, "pixel_clock_select", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.pixel_clock_select);
-  new bx_shadow_bool_c(mode, "internal_palette_size", &BX_VGA_THIS s.attribute_ctrl.mode_ctrl.internal_palette_size);
+  BXRS_PARAM_BOOL(mode, graphics_alpha, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.graphics_alpha);
+  BXRS_PARAM_BOOL(mode, display_type, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.display_type);
+  BXRS_PARAM_BOOL(mode, enable_line_graphics, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.enable_line_graphics);
+  BXRS_PARAM_BOOL(mode, blink_intensity, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.blink_intensity);
+  BXRS_PARAM_BOOL(mode, pixel_panning_compat, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.pixel_panning_compat);
+  BXRS_PARAM_BOOL(mode, pixel_clock_select, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.pixel_clock_select);
+  BXRS_PARAM_BOOL(mode, internal_palette_size, BX_VGA_THIS s.attribute_ctrl.mode_ctrl.internal_palette_size);
   bx_list_c *pel = new bx_list_c(list, "pel");
   new bx_shadow_num_c(pel, "write_data_register", &BX_VGA_THIS s.pel.write_data_register, BASE_HEX);
   new bx_shadow_num_c(pel, "write_data_cycle", &BX_VGA_THIS s.pel.write_data_cycle);
@@ -312,10 +287,10 @@ void bx_vgacore_c::register_state(bx_list_c *parent)
   new bx_shadow_num_c(gfxc, "read_map_select", &BX_VGA_THIS s.graphics_ctrl.read_map_select);
   new bx_shadow_num_c(gfxc, "write_mode", &BX_VGA_THIS s.graphics_ctrl.write_mode);
   new bx_shadow_num_c(gfxc, "read_mode", &BX_VGA_THIS s.graphics_ctrl.read_mode);
-  new bx_shadow_bool_c(gfxc, "odd_even", &BX_VGA_THIS s.graphics_ctrl.odd_even);
-  new bx_shadow_bool_c(gfxc, "chain_odd_even", &BX_VGA_THIS s.graphics_ctrl.chain_odd_even);
+  BXRS_PARAM_BOOL(gfxc, odd_even, BX_VGA_THIS s.graphics_ctrl.odd_even);
+  BXRS_PARAM_BOOL(gfxc, chain_odd_even, BX_VGA_THIS s.graphics_ctrl.chain_odd_even);
   new bx_shadow_num_c(gfxc, "shift_reg", &BX_VGA_THIS s.graphics_ctrl.shift_reg);
-  new bx_shadow_bool_c(gfxc, "graphics_alpha", &BX_VGA_THIS s.graphics_ctrl.graphics_alpha);
+  BXRS_PARAM_BOOL(gfxc, graphics_alpha, BX_VGA_THIS s.graphics_ctrl.graphics_alpha);
   new bx_shadow_num_c(gfxc, "memory_mapping", &BX_VGA_THIS s.graphics_ctrl.memory_mapping);
   new bx_shadow_num_c(gfxc, "color_dont_care", &BX_VGA_THIS s.graphics_ctrl.color_dont_care, BASE_HEX);
   new bx_shadow_num_c(gfxc, "bitmask", &BX_VGA_THIS s.graphics_ctrl.bitmask, BASE_HEX);
@@ -326,20 +301,20 @@ void bx_vgacore_c::register_state(bx_list_c *parent)
   bx_list_c *sequ = new bx_list_c(list, "sequencer");
   new bx_shadow_num_c(sequ, "index", &BX_VGA_THIS s.sequencer.index);
   new bx_shadow_num_c(sequ, "map_mask", &BX_VGA_THIS s.sequencer.map_mask);
-  new bx_shadow_bool_c(sequ, "reset1", &BX_VGA_THIS s.sequencer.reset1);
-  new bx_shadow_bool_c(sequ, "reset2", &BX_VGA_THIS s.sequencer.reset2);
+  BXRS_PARAM_BOOL(sequ, reset1, BX_VGA_THIS s.sequencer.reset1);
+  BXRS_PARAM_BOOL(sequ, reset2, BX_VGA_THIS s.sequencer.reset2);
   new bx_shadow_num_c(sequ, "reg1", &BX_VGA_THIS s.sequencer.reg1, BASE_HEX);
   new bx_shadow_num_c(sequ, "char_map_select", &BX_VGA_THIS s.sequencer.char_map_select);
-  new bx_shadow_bool_c(sequ, "extended_mem", &BX_VGA_THIS s.sequencer.extended_mem);
-  new bx_shadow_bool_c(sequ, "odd_even", &BX_VGA_THIS s.sequencer.odd_even);
-  new bx_shadow_bool_c(sequ, "chain_four", &BX_VGA_THIS s.sequencer.chain_four);
-  new bx_shadow_bool_c(list, "enabled", &BX_VGA_THIS s.vga_enabled);
+  BXRS_PARAM_BOOL(sequ, extended_mem, BX_VGA_THIS s.sequencer.extended_mem);
+  BXRS_PARAM_BOOL(sequ, odd_even, BX_VGA_THIS s.sequencer.odd_even);
+  BXRS_PARAM_BOOL(sequ, chain_four, BX_VGA_THIS s.sequencer.chain_four);
+  BXRS_PARAM_BOOL(list, enabled, BX_VGA_THIS s.vga_enabled);
   new bx_shadow_num_c(list, "line_offset", &BX_VGA_THIS s.line_offset);
   new bx_shadow_num_c(list, "line_compare", &BX_VGA_THIS s.line_compare);
   new bx_shadow_num_c(list, "vertical_display_end", &BX_VGA_THIS s.vertical_display_end);
   new bx_shadow_num_c(list, "charmap_address", &BX_VGA_THIS s.charmap_address);
-  new bx_shadow_bool_c(list, "x_dotclockdiv2", &BX_VGA_THIS s.x_dotclockdiv2);
-  new bx_shadow_bool_c(list, "y_doublescan", &BX_VGA_THIS s.y_doublescan);
+  BXRS_PARAM_BOOL(list, x_dotclockdiv2, BX_VGA_THIS s.x_dotclockdiv2);
+  BXRS_PARAM_BOOL(list, y_doublescan, BX_VGA_THIS s.y_doublescan);
   bx_list_c *vclk = new bx_list_c(list, "vclk");
   for (int i = 0; i < 4; i++) {
     sprintf(name, "%d", i);
@@ -353,7 +328,7 @@ void bx_vgacore_c::register_state(bx_list_c *parent)
   new bx_shadow_num_c(list, "last_bpp", &BX_VGA_THIS s.last_bpp);
   new bx_shadow_num_c(list, "last_fw", &BX_VGA_THIS s.last_fw);
   new bx_shadow_num_c(list, "last_fh", &BX_VGA_THIS s.last_fh);
-  new bx_shadow_bool_c(list, "vga_override", &BX_VGA_THIS s.vga_override);
+  BXRS_PARAM_BOOL(list, vga_override, BX_VGA_THIS s.vga_override);
   new bx_shadow_data_c(list, "memory", BX_VGA_THIS s.memory, BX_VGA_THIS s.memsize);
 }
 
@@ -371,8 +346,6 @@ void bx_vgacore_c::after_restore_state(void)
     BX_VGA_THIS s.last_yres = BX_VGA_THIS s.max_yres;
     BX_VGA_THIS vga_redraw_area(0, 0, BX_VGA_THIS s.max_xres, BX_VGA_THIS s.max_yres);
   }
-  BX_VGA_THIS update();
-  bx_gui->flush();
 }
 
 void bx_vgacore_c::determine_screen_dimensions(unsigned *piHeight, unsigned *piWidth)
@@ -600,7 +573,7 @@ Bit32u bx_vgacore_c::read(Bit32u address, unsigned io_len)
       switch (BX_VGA_THIS s.sequencer.index) {
         case 0: /* sequencer: reset */
           BX_DEBUG(("io read 0x3c5: sequencer reset"));
-          RETURN(BX_VGA_THIS s.sequencer.reset1 | (BX_VGA_THIS s.sequencer.reset2<<1));
+          RETURN((Bit8u)BX_VGA_THIS s.sequencer.reset1 | (BX_VGA_THIS s.sequencer.reset2<<1));
           break;
         case 1: /* sequencer: clocking mode */
           BX_DEBUG(("io read 0x3c5: sequencer clocking mode"));
@@ -787,11 +760,11 @@ void bx_vgacore_c::write_handler(void *this_ptr, Bit32u address, Bit32u value, u
   class_ptr->write(address, value, io_len, 0);
 }
 
-void bx_vgacore_c::write(Bit32u address, Bit32u value, unsigned io_len, bx_bool no_log)
+void bx_vgacore_c::write(Bit32u address, Bit32u value, unsigned io_len, bool no_log)
 {
   Bit8u charmap1, charmap2, prev_memory_mapping;
-  bx_bool prev_video_enabled, prev_line_graphics, prev_int_pal_size, prev_graphics_alpha;
-  bx_bool needs_update = 0, charmap_update = 0;
+  bool prev_video_enabled, prev_line_graphics, prev_int_pal_size, prev_graphics_alpha;
+  bool needs_update = 0, charmap_update = 0;
 
 #if defined(VGA_TRACE_FEATURE)
   if (!no_log)
@@ -1303,7 +1276,7 @@ void bx_vgacore_c::write(Bit32u address, Bit32u value, unsigned io_len, bx_bool 
   }
 }
 
-void bx_vgacore_c::set_override(bx_bool enabled, void *dev)
+void bx_vgacore_c::set_override(bool enabled, void *dev)
 {
   BX_VGA_THIS s.vga_override = enabled;
 #if BX_SUPPORT_PCI
@@ -1316,7 +1289,7 @@ void bx_vgacore_c::set_override(bx_bool enabled, void *dev)
   }
 }
 
-Bit8u bx_vgacore_c::get_vga_pixel(Bit16u x, Bit16u y, Bit16u saddr, Bit16u lc, bx_bool bs, Bit8u **plane)
+Bit8u bx_vgacore_c::get_vga_pixel(Bit16u x, Bit16u y, Bit16u saddr, Bit16u lc, bool bs, Bit8u **plane)
 {
   Bit8u attribute, bit_no, palette_reg_val, DAC_regno;
   Bit32u byte_offset;
@@ -1363,7 +1336,7 @@ Bit8u bx_vgacore_c::get_vga_pixel(Bit16u x, Bit16u y, Bit16u saddr, Bit16u lc, b
   return DAC_regno;
 }
 
-bx_bool bx_vgacore_c::skip_update(void)
+bool bx_vgacore_c::skip_update(void)
 {
   Bit64u display_usec;
 
@@ -1392,8 +1365,8 @@ void bx_vgacore_c::update(void)
 {
   unsigned iHeight, iWidth;
   static unsigned cs_counter = 1;
-  static bx_bool cs_visible = 0;
-  bx_bool cs_toggle = 0;
+  static bool cs_visible = 0;
+  bool cs_toggle = 0;
 
   cs_counter--;
   /* no screen update necessary */
@@ -1640,8 +1613,7 @@ void bx_vgacore_c::update(void)
     return;
   } else {
     // text mode
-    unsigned long start_address;
-    unsigned long cursor_address, cursor_x, cursor_y;
+    Bit16u cursor_address;
     bx_vga_tminfo_t tm_info;
     unsigned VDE, cols, rows, cWidth;
     Bit8u MSL;
@@ -1652,11 +1624,8 @@ void bx_vgacore_c::update(void)
       BX_ERROR(("byte panning not implemented yet"));
     }
     tm_info.cs_start = BX_VGA_THIS s.CRTC.reg[0x0a] & 0x3f;
-    if (!cs_visible) {
-      tm_info.cs_start |= 0x20;
-    }
     tm_info.cs_end = BX_VGA_THIS s.CRTC.reg[0x0b] & 0x1f;
-    tm_info.line_offset = BX_VGA_THIS s.CRTC.reg[0x13] << 2;
+    tm_info.line_offset = BX_VGA_THIS s.line_offset;
     tm_info.line_compare = BX_VGA_THIS s.line_compare;
     tm_info.h_panning = BX_VGA_THIS s.attribute_ctrl.horiz_pel_panning & 0x0f;
     tm_info.v_panning = BX_VGA_THIS s.CRTC.reg[0x08] & 0x1f;
@@ -1719,30 +1688,25 @@ void bx_vgacore_c::update(void)
     if (skip_update()) return;
 
     // pass old text snapshot & new VGA memory contents
-    start_address = tm_info.start_address;
     cursor_address = 2*((BX_VGA_THIS s.CRTC.reg[0x0e] << 8) +
                      BX_VGA_THIS s.CRTC.reg[0x0f]);
-    if (cursor_address < start_address) {
-      cursor_x = 0xffff;
-      cursor_y = 0xffff;
-    } else {
-      cursor_x = ((cursor_address - start_address)/2) % (iWidth/cWidth);
-      cursor_y = ((cursor_address - start_address)/2) / (iWidth/cWidth);
+    if ((cursor_address < tm_info.start_address) ||
+        (cursor_address > (tm_info.start_address + tm_info.line_offset * rows))) {
+      cursor_address = 0xffff;
     }
-    bx_gui->text_update(BX_VGA_THIS s.text_snapshot,
-                        &BX_VGA_THIS s.memory[start_address],
-                        cursor_x, cursor_y, &tm_info);
+    bx_gui->text_update_common(BX_VGA_THIS s.text_snapshot,
+                               BX_VGA_THIS s.memory,
+                               cursor_address, &tm_info);
     if (BX_VGA_THIS s.vga_mem_updated) {
       // screen updated, copy new VGA memory contents into text snapshot
-      memcpy(BX_VGA_THIS s.text_snapshot,
-             &BX_VGA_THIS s.memory[start_address],
-             tm_info.line_offset*rows);
+      memcpy(BX_VGA_THIS s.text_snapshot, BX_VGA_THIS s.memory,
+             tm_info.line_offset * rows + tm_info.start_address);
       BX_VGA_THIS s.vga_mem_updated = 0;
     }
   }
 }
 
-bx_bool bx_vgacore_c::mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+bool bx_vgacore_c::mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
   bx_vgacore_c *class_ptr = (bx_vgacore_c *) param;
   Bit8u *data_ptr;
@@ -1835,7 +1799,7 @@ Bit8u bx_vgacore_c::mem_read(bx_phy_address addr)
   }
 }
 
-bx_bool bx_vgacore_c::mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+bool bx_vgacore_c::mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
   bx_vgacore_c *class_ptr = (bx_vgacore_c *) param;
   Bit8u *data_ptr;
@@ -2287,7 +2251,7 @@ void bx_vgacore_c::get_text_snapshot(Bit8u **text_snapshot, unsigned *txHeight,
 }
 
 #if BX_DEBUGGER
-void bx_vgacore_c::debug_dump(void)
+void bx_vgacore_c::debug_dump(int argc, char **argv)
 {
   dbg_printf("Standard VGA adapter\n\n");
   dbg_printf("s.misc_output.color_emulation = %u\n",
@@ -2348,6 +2312,10 @@ void bx_vgacore_c::debug_dump(void)
             (unsigned) BX_VGA_THIS s.attribute_ctrl.mode_ctrl.internal_palette_size);
   dbg_printf("s.attribute_ctrl.mode_ctrl.pixel_clock_select = %u\n",
             (unsigned) BX_VGA_THIS s.attribute_ctrl.mode_ctrl.pixel_clock_select);
+
+  if (argc > 0) {
+    dbg_printf("\nAdditional options not supported\n");
+  }
 }
 #endif
 
@@ -2401,7 +2369,7 @@ void bx_vgacore_c::redraw_area(unsigned x0, unsigned y0, unsigned width, unsigne
   }
 }
 
-void bx_vgacore_c::refresh_display(void *this_ptr, bx_bool redraw)
+void bx_vgacore_c::refresh_display(void *this_ptr, bool redraw)
 {
   bx_vgacore_c *vgadev = (bx_vgacore_c *) this_ptr;
 #if BX_SUPPORT_PCI

@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_cbi.cc 13241 2017-05-28 08:13:06Z vruppert $
+// $Id: usb_cbi.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  UFI/CBI floppy disk storage device support
 //
 //  Copyright (c) 2015       Benjamin David Lunt
-//  Copyright (C) 2015-2016  The Bochs Project
+//  Copyright (C) 2015-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -45,16 +45,14 @@
 
 #define LOG_THIS
 
-// USB device plugin entry points
+// USB device plugin entry point
 
-int CDECL libusb_cbi_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_cbi)
 {
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_USB;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_cbi_dev_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 //
@@ -312,7 +310,7 @@ const char *fdimage_mode_names[] = {
   NULL
 };
 
-static int usb_floppy_count = 0;
+static Bit8u usb_floppy_count = 0;
 
 usb_cbi_device_c::usb_cbi_device_c(const char *filename)
 {
@@ -332,33 +330,17 @@ usb_cbi_device_c::usb_cbi_device_c(const char *filename)
   d.config_descriptor = bx_cbi_config_descriptor;
   d.device_desc_size = sizeof(bx_cbi_dev_descriptor);
   d.config_desc_size = sizeof(bx_cbi_config_descriptor);
-  // set the model information
-  //  s.model == 1 if use teac model, else use bochs model
-  if (s.model) {
-    bx_cbi_dev_descriptor[8] = 0x44;
-    bx_cbi_dev_descriptor[9] = 0x06;
-    d.vendor_desc = "TEAC    ";
-    d.product_desc = "TEAC FD-05PUW   ";
-    d.serial_num = "3000";
-  } else {
-    bx_cbi_dev_descriptor[8] = 0x00;
-    bx_cbi_dev_descriptor[9] = 0x00;
-    d.vendor_desc = "BOCHS   ";
-    d.product_desc = d.devname;
-    d.serial_num = "00.10";
-  }
   s.inserted = 0;
   strcpy(tmpfname, filename);
   ptr1 = strtok(tmpfname, ":");
   ptr2 = strtok(NULL, ":");
   if ((ptr2 == NULL) || (strlen(ptr1) < 2)) {
-    s.image_mode = BX_HDIMAGE_MODE_FLAT;
+    s.image_mode = strdup("flat");
     s.fname = filename;
   } else {
-    s.image_mode = SIM->hdimage_get_mode(ptr1);
+    s.image_mode = strdup(ptr1);
     s.fname = filename+strlen(ptr1)+1;
-    if ((s.image_mode != BX_HDIMAGE_MODE_FLAT) &&
-        (s.image_mode != BX_HDIMAGE_MODE_VVFAT)) {
+    if (strcmp(s.image_mode, "flat") && strcmp(s.image_mode, "vvfat")) {
       BX_PANIC(("USB floppy only supports image modes 'flat' and 'vvfat'"));
     }
   }
@@ -368,8 +350,8 @@ usb_cbi_device_c::usb_cbi_device_c(const char *filename)
     DEV_register_timer(this, floppy_timer_handler, CBI_SECTOR_TIME, 0, 0, "USB FD timer");
   // config options
   bx_list_c *usb_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_USB);
-  sprintf(pname, "floppy%d", ++usb_floppy_count);
-  sprintf(label, "USB floppy #%d Configuration", usb_floppy_count);
+  sprintf(pname, "floppy%u", ++usb_floppy_count);
+  sprintf(label, "USB floppy #%u Configuration", usb_floppy_count);
   s.config = new bx_list_c(usb_rt, pname, label);
   s.config->set_options(bx_list_c::SERIES_ASK | bx_list_c::USE_BOX_TITLE);
   s.config->set_device_param(this);
@@ -381,7 +363,7 @@ usb_cbi_device_c::usb_cbi_device_c(const char *filename)
     "Image mode",
     "Mode of the floppy image",
     fdimage_mode_names, 0, 0);
-  if (s.image_mode == BX_HDIMAGE_MODE_VVFAT) {
+  if (!strcmp(s.image_mode, "vvfat")) {
     mode->set(1);
   }
   mode->set_handler(floppy_param_handler);
@@ -417,6 +399,7 @@ usb_cbi_device_c::~usb_cbi_device_c(void)
   set_inserted(0);
   if (s.dev_buffer != NULL)
     delete [] s.dev_buffer;
+  free(s.image_mode);
   if (SIM->is_wx_selected()) {
     bx_list_c *usb = (bx_list_c*)SIM->get_param("ports.usb");
     usb->remove(s.config->get_name());
@@ -427,7 +410,7 @@ usb_cbi_device_c::~usb_cbi_device_c(void)
   bx_pc_system.unregisterTimer(s.floppy_timer_index);
 }
 
-bx_bool usb_cbi_device_c::set_option(const char *option)
+bool usb_cbi_device_c::set_option(const char *option)
 {
   if (!strncmp(option, "write_protected:", 16)) {
     SIM->get_param_bool("readonly", s.config)->set(atol(&option[16]));
@@ -443,10 +426,25 @@ bx_bool usb_cbi_device_c::set_option(const char *option)
   return 0;
 }
 
-bx_bool usb_cbi_device_c::init()
+bool usb_cbi_device_c::init()
 {
+  // set the model information
+  //  s.model == 1 if use teac model, else use bochs model
+  if (s.model) {
+    bx_cbi_dev_descriptor[8] = 0x44;
+    bx_cbi_dev_descriptor[9] = 0x06;
+    d.vendor_desc = "TEAC    ";
+    d.product_desc = "TEAC FD-05PUW   ";
+    d.serial_num = "3000";
+  } else {
+    bx_cbi_dev_descriptor[8] = 0x00;
+    bx_cbi_dev_descriptor[9] = 0x00;
+    d.vendor_desc = "BOCHS   ";
+    d.product_desc = d.devname;
+    d.serial_num = "00.10";
+  }
   if (set_inserted(1)) {
-    sprintf(s.info_txt, "USB CBI: path='%s', mode='%s'", s.fname, hdimage_mode_names[s.image_mode]);
+    sprintf(s.info_txt, "USB CBI: path='%s', mode='%s'", s.fname, s.image_mode);
   } else {
     sprintf(s.info_txt, "USB CBI: media not present");
   }
@@ -463,7 +461,7 @@ const char* usb_cbi_device_c::get_info()
 {
   // set the write protected bit given by parameter in bochsrc.txt file
   bx_cbi_dev_mode_sense_cur[3] &= ~0x80;
-  bx_cbi_dev_mode_sense_cur[3] |= ((s.wp > 0) << 7);
+  bx_cbi_dev_mode_sense_cur[3] |= s.wp ? (1 << 7) : 0;
 
   return s.info_txt;
 }
@@ -593,11 +591,11 @@ int usb_cbi_device_c::handle_control(int request, int value, int index, int leng
   return ret;
 }
 
-bx_bool usb_cbi_device_c::handle_command(Bit8u *command)
+bool usb_cbi_device_c::handle_command(Bit8u *command)
 {
   Bit32u lba, count;
   int pc, pagecode;
-  bx_bool ret = 1; // assume valid return
+  bool ret = 1; // assume valid return
 
   s.cur_command = command[0];
   s.usb_buf = s.dev_buffer;
@@ -1208,16 +1206,13 @@ void usb_cbi_device_c::cancel_packet(USBPacket *p)
   s.packet = NULL;
 }
 
-bx_bool usb_cbi_device_c::set_inserted(bx_bool value)
+bool usb_cbi_device_c::set_inserted(bool value)
 {
-  Bit8u mode;
-
   s.inserted = value;
   if (value) {
     s.fname = SIM->get_param_string("path", s.config)->getptr();
     if ((strlen(s.fname) > 0) && (strcmp(s.fname, "none"))) {
-      mode = SIM->get_param_enum("mode", s.config)->get();
-      s.image_mode = (mode == 1) ? BX_HDIMAGE_MODE_VVFAT : BX_HDIMAGE_MODE_FLAT;
+      s.image_mode = strdup(SIM->get_param_enum("mode", s.config)->get_selected());
       s.hdimage = DEV_hdimage_init_image(s.image_mode, 1474560, "");
       if ((s.hdimage->open(s.fname)) < 0) {
         BX_ERROR(("could not open floppy image file '%s'", s.fname));

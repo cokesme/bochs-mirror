@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_printer.h 13054 2017-01-29 08:48:08Z vruppert $
+// $Id: usb_printer.h 14117 2021-02-01 12:42:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2017  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,7 @@ public:
   usb_printer_device_c(usbdev_type type, const char *filename);
   virtual ~usb_printer_device_c(void);
 
-  virtual bx_bool init();
+  virtual bool init();
   virtual const char* get_info();
 
   virtual void handle_reset();

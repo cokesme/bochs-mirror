@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: init.cc 13761 2020-01-03 05:29:45Z sshwarts $
+// $Id: init.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -25,6 +25,7 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "cpustats.h"
 
@@ -269,7 +270,7 @@ void BX_CPU_C::register_state(void)
 #endif
 
 #if BX_CPU_LEVEL >= 5
-  BXRS_HEX_PARAM_FIELD(cpu, tsc_last_reset, tsc_last_reset);
+  BXRS_HEX_PARAM_FIELD(cpu, tsc_adjust, tsc_adjust);
 #if BX_SUPPORT_VMX || BX_SUPPORT_SVM
   BXRS_HEX_PARAM_FIELD(cpu, tsc_offset, tsc_offset);
 #endif
@@ -277,6 +278,7 @@ void BX_CPU_C::register_state(void)
 
 #if BX_SUPPORT_PKEYS
   BXRS_HEX_PARAM_FIELD(cpu, pkru, pkru);
+  BXRS_HEX_PARAM_FIELD(cpu, pkrs, pkrs);
 #endif
 
   for(n=0; n<6; n++) {
@@ -415,6 +417,9 @@ void BX_CPU_C::register_state(void)
   if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_SCA_MITIGATIONS)) {
     BXRS_HEX_PARAM_FIELD(MSR, ia32_spec_ctrl, msr.ia32_spec_ctrl);
   }
+#if BX_SUPPORT_VMX
+  BXRS_HEX_PARAM_FIELD(MSR, ia32_feature_ctrl, msr.ia32_feature_ctrl);
+#endif
 
 #if BX_CONFIGURE_MSRS
   bx_list_c *MSRS = new bx_list_c(cpu, "USER_MSR");
@@ -653,7 +658,7 @@ void BX_CPU_C::after_restore_state(void)
 #endif
 
 #if BX_SUPPORT_PKEYS
-  set_PKRU(BX_CPU_THIS_PTR pkru);
+  set_PKeys(BX_CPU_THIS_PTR pkru, BX_CPU_THIS_PTR pkrs);
 #endif
 
   assert_checks();
@@ -939,7 +944,7 @@ void BX_CPU_C::reset(unsigned source)
   if (source == BX_RESET_HARDWARE) {
 
 #if BX_SUPPORT_PKEYS
-    BX_CPU_THIS_PTR set_PKRU(0);
+    BX_CPU_THIS_PTR set_PKeys(0, 0);
 #endif
 
 #if BX_CPU_LEVEL >= 6
@@ -1046,9 +1051,7 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR vmcsptr = BX_CPU_THIS_PTR vmxonptr = BX_INVALID_VMCSPTR;
   set_VMCSPTR(BX_CPU_THIS_PTR vmcsptr);
   if (source == BX_RESET_HARDWARE) {
-    /* enable VMX, should be done in BIOS instead */
-    BX_CPU_THIS_PTR msr.ia32_feature_ctrl =
-      /*BX_IA32_FEATURE_CONTROL_LOCK_BIT | */BX_IA32_FEATURE_CONTROL_VMX_ENABLE_BIT;
+    BX_CPU_THIS_PTR msr.ia32_feature_ctrl = 0;
   }
 #endif
 

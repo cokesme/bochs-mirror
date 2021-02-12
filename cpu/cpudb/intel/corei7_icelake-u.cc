@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_icelake-u.cc 13768 2020-01-03 19:53:20Z sshwarts $
+// $Id: corei7_icelake-u.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2019 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu/cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "corei7_icelake-u.h"
 
@@ -67,6 +68,7 @@ corei7_icelake_t::corei7_icelake_t(BX_CPU_C *cpu):
   enable_cpu_extension(BX_ISA_NX);
   enable_cpu_extension(BX_ISA_1G_PAGES);
   enable_cpu_extension(BX_ISA_PCID);
+  enable_cpu_extension(BX_ISA_TSC_ADJUST);
   enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_SSE);
   enable_cpu_extension(BX_ISA_SSE2);
@@ -100,7 +102,6 @@ corei7_icelake_t::corei7_icelake_t(BX_CPU_C *cpu):
   enable_cpu_extension(BX_ISA_SMAP);
   enable_cpu_extension(BX_ISA_RDRAND);
   enable_cpu_extension(BX_ISA_RDSEED);
-  enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_FCS_FDS_DEPRECATION);
   enable_cpu_extension(BX_ISA_SHA);
 #if BX_SUPPORT_EVEX
@@ -134,7 +135,7 @@ void corei7_icelake_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid
 {
   static const char* brand_string = "QuadCore Intel Core i7-1065G7, 1300 MHz\0\0\0\0\0\0\0";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 2 && function < 0x80000000) function = 2;
 
@@ -268,18 +269,11 @@ Bit32u corei7_icelake_t::get_vmx_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void corei7_icelake_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0x1B;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x2;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0x1B, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //
@@ -429,7 +423,9 @@ void corei7_icelake_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_SSE |
               BX_CPUID_STD_SSE2 |
               BX_CPUID_STD_SELF_SNOOP |
+#if BX_SUPPORT_SMP
               BX_CPUID_STD_HT |
+#endif
               BX_CPUID_STD_THERMAL_MONITOR |
               BX_CPUID_STD_PBE;
 #if BX_SUPPORT_APIC
@@ -538,7 +534,7 @@ void corei7_icelake_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t
     leaf->eax = 0; /* report max sub-leaf that supported in leaf 7 */
 
     // * [0:0]    FS/GS BASE access instructions
-    // ! [1:1]    Support for IA32_TSC_ADJUST MSR
+    // * [1:1]    Support for IA32_TSC_ADJUST MSR
     // ! [2:2]    SGX: Intel Software Guard Extensions
     // * [3:3]    BMI1: Advanced Bit Manipulation Extensions
     //   [4:4]    HLE: Hardware Lock Elision
@@ -571,7 +567,7 @@ void corei7_icelake_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t
     // * [31:31]  AVX512VL variable vector length support
 
     leaf->ebx = BX_CPUID_EXT3_FSGSBASE | 
-             /* BX_CPUID_EXT3_TSC_ADJUST - not implemented yet */
+                BX_CPUID_EXT3_TSC_ADJUST |
                 BX_CPUID_EXT3_BMI1 | 
                 BX_CPUID_EXT3_AVX2 | 
                 BX_CPUID_EXT3_FDP_DEPRECATION | 
@@ -880,7 +876,7 @@ void corei7_icelake_t::get_ext_cpuid_leaf_7(cpuid_function_t *leaf) const
 
 void corei7_icelake_t::dump_cpuid(void) const
 {
-  bx_cpuid_t::dump_cpuid(0xD, 0x8);
+  bx_cpuid_t::dump_cpuid(0x18, 0x8);
 }
 
 bx_cpuid_t *create_corei7_icelake_u_cpuid(BX_CPU_C *cpu) { return new corei7_icelake_t(cpu); }

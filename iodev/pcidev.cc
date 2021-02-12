@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcidev.cc 13497 2018-05-01 15:54:37Z vruppert $
+// $Id: pcidev.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
  *  PCIDEV: PCI host device mapping
  *  Copyright (C) 2003       Frank Cornelis
- *  Copyright (C) 2003-2018  The Bochs Project
+ *  Copyright (C) 2003-2021  The Bochs Project
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -113,25 +113,26 @@ Bit32s pcidev_options_save(FILE *fp)
   return 0;
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libpcidev_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(pcidev)
 {
-  thePciDevAdapter = new bx_pcidev_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePciDevAdapter, BX_PLUGIN_PCIDEV);
-  // add new configuration parameter for the config interface
-  pcidev_init_options();
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("pcidev", pcidev_options_parser, pcidev_options_save);
+  if (mode == PLUGIN_INIT) {
+    thePciDevAdapter = new bx_pcidev_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePciDevAdapter, BX_PLUGIN_PCIDEV);
+    // add new configuration parameter for the config interface
+    pcidev_init_options();
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("pcidev", pcidev_options_parser, pcidev_options_save);
+  } else if (mode == PLUGIN_FINI) {
+    SIM->unregister_addon_option("pcidev");
+    bx_list_c *menu = (bx_list_c*)SIM->get_param("network");
+    menu->remove("pcidev");
+    delete thePciDevAdapter;
+  } else {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return 0; // Success
-}
-
-void CDECL libpcidev_LTX_plugin_fini(void)
-{
-  SIM->unregister_addon_option("pcidev");
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("network");
-  menu->remove("pcidev");
-  delete thePciDevAdapter;
 }
 
 // the device object
@@ -158,7 +159,7 @@ static void pcidev_sighandler(int param)
   DEV_pci_set_irq(pcidev->devfunc, pcidev->intpin, 1);
 }
 
-static bx_bool pcidev_mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+static bool pcidev_mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
     struct region_struct *region = (struct region_struct *)param;
     bx_pcidev_c *pcidev = region->pcidev;
@@ -195,7 +196,7 @@ static bx_bool pcidev_mem_read_handler(bx_phy_address addr, unsigned len, void *
 }
 
 
-static bx_bool pcidev_mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+static bool pcidev_mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
     struct region_struct *region = (struct region_struct *)param;
     bx_pcidev_c *pcidev = region->pcidev;

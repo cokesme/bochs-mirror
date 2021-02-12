@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpuid.cc 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: cpuid.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2014-2019 Stanislav Shwartsman
+//   Copyright (c) 2014-2020 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@
 /////////////////////////////////////////////////////////////////////////
 
 #include "bochs.h"
+#include "gui/siminterface.h"
 #include "cpu.h"
 #include "param_names.h"
 #include "cpuid.h"
@@ -107,20 +108,23 @@ static const char *cpu_feature_name[] =
   "avx512vbmi",             // BX_ISA_AVX512_VBMI
   "avx512vbmi2",            // BX_ISA_AVX512_VBMI2
   "avx512ifma52",           // BX_ISA_AVX512_IFMA52
-  "avx512ivpopcnt",         // BX_ISA_AVX512_VPOPCNTDQ
-  "avx512ivnni",            // BX_ISA_AVX512_VNNI
-  "avx512ibitalg",          // BX_ISA_AVX512_BITALG
+  "avx512vpopcnt",          // BX_ISA_AVX512_VPOPCNTDQ
+  "avx512vnni",             // BX_ISA_AVX512_VNNI
+  "avx512bitalg",           // BX_ISA_AVX512_BITALG
   "avx512vp2intersect",     // BX_ISA_AVX512_VP2INTERSECT
+  "avx_vnni",               // BX_ISA_AVX_VNNI
   "xapic",                  // BX_ISA_XAPIC
   "x2apic",                 // BX_ISA_X2APIC
   "xapicext",               // BX_ISA_XAPICEXT
   "pcid",                   // BX_ISA_PCID
   "smep",                   // BX_ISA_SMEP
+  "tsc_adjust",             // BX_ISA_TSC_ADJUST
   "tsc_deadline",           // BX_ISA_TSC_DEADLINE
   "fopcode_deprecation",    // BX_ISA_FOPCODE_DEPRECATION
   "fcs_fds_deprecation",    // BX_ISA_FCS_FDS_DEPRECATION
   "fdp_deprecation",        // BX_ISA_FDP_DEPRECATION
   "pku",                    // BX_ISA_PKU
+  "pks",                    // BX_ISA_PKS
   "umip",                   // BX_ISA_UMIP
   "rdpid",                  // BX_ISA_RDPID
   "tce",                    // BX_ISA_TCE
@@ -431,12 +435,18 @@ void bx_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *
 }
 #endif
 
-void bx_cpuid_t::get_leaf_0(unsigned max_leaf, const char *vendor_string, cpuid_function_t *leaf) const
+void bx_cpuid_t::get_leaf_0(unsigned max_leaf, const char *vendor_string, cpuid_function_t *leaf, unsigned limited_max_leaf) const
 {
   // EAX: highest function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
+  if (max_leaf < 0x80000000 && max_leaf > 0x2) {
+    // do not limit extended CPUID leafs
+    static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+    if (cpuid_limit_winnt)
+      max_leaf = (limited_max_leaf < 0x02) ? limited_max_leaf : 0x02;
+  }
   leaf->eax = max_leaf;
 
   if (vendor_string == NULL) {

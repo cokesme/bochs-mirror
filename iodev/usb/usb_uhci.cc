@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_uhci.cc 13470 2018-02-24 18:04:36Z vruppert $
+// $Id: usb_uhci.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2015  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2018  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -77,25 +77,26 @@ Bit32s usb_uhci_options_save(FILE *fp)
   return 0;
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libusb_uhci_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_uhci)
 {
-  theUSB_UHCI = new bx_usb_uhci_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_UHCI, BX_PLUGIN_USB_UHCI);
-  // add new configuration parameter for the config interface
-  SIM->init_usb_options("UHCI", "uhci", USB_UHCI_PORTS);
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("usb_uhci", usb_uhci_options_parser, usb_uhci_options_save);
+  if (mode == PLUGIN_INIT) {
+    theUSB_UHCI = new bx_usb_uhci_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_UHCI, BX_PLUGIN_USB_UHCI);
+    // add new configuration parameter for the config interface
+    SIM->init_usb_options("UHCI", "uhci", USB_UHCI_PORTS);
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("usb_uhci", usb_uhci_options_parser, usb_uhci_options_save);
+  } else if (mode == PLUGIN_FINI) {
+    SIM->unregister_addon_option("usb_uhci");
+    bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.usb");
+    delete theUSB_UHCI;
+    menu->remove("uhci");
+  } else {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_uhci_LTX_plugin_fini(void)
-{
-  SIM->unregister_addon_option("usb_uhci");
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.usb");
-  delete theUSB_UHCI;
-  menu->remove("uhci");
 }
 
 // the device object
@@ -189,7 +190,7 @@ void bx_usb_uhci_c::reset(unsigned type)
 
 void bx_usb_uhci_c::register_state()
 {
-  bx_uhci_core_c::register_state(SIM->get_bochs_root());
+  BX_UHCI_THIS uhci_register_state(SIM->get_bochs_root());
 }
 
 void bx_usb_uhci_c::after_restore_state()
@@ -265,13 +266,13 @@ void bx_usb_uhci_c::runtime_config(void)
 
 // USB runtime parameter handler
 const char *bx_usb_uhci_c::usb_param_handler(bx_param_string_c *param, int set,
-                                           const char *oldval, const char *val, int maxlen)
+                                             const char *oldval, const char *val, int maxlen)
 {
   int portnum;
 
   if (set) {
     portnum = atoi((param->get_parent())->get_name()+4) - 1;
-    bx_bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
+    bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
     if ((portnum >= 0) && (portnum < USB_UHCI_PORTS)) {
       if (empty && BX_UHCI_THIS hub.usb_port[portnum].status) {
         BX_UHCI_THIS device_change |= (1 << portnum);

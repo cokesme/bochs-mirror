@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_tap.cc 13257 2017-06-16 08:27:55Z vruppert $
+// $Id: eth_tap.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -88,17 +88,14 @@
 
 #if BX_NETWORKING && BX_NETMOD_TAP
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libtap_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(tap)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libtap_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation

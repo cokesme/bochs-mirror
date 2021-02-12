@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundoss.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: soundoss.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -40,17 +40,14 @@
 #include <sys/ioctl.h>
 #include <sys/soundcard.h>
 
-// sound driver plugin entry points
+// sound driver plugin entry point
 
-int CDECL liboss_sound_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_SND_MODULE(oss)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_SND;
+  }
   return 0; // Success
-}
-
-void CDECL liboss_sound_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // bx_soundlow_waveout_oss_c class implementation

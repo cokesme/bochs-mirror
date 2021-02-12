@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: devices.cc 13751 2019-12-30 07:16:46Z vruppert $
+// $Id: devices.cc 14129 2021-02-06 16:51:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2019  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  I/O port handlers API Copyright (C) 2003 by Frank Cornelis
 //
@@ -24,12 +24,14 @@
 
 
 #include "iodev.h"
+#include "gui/keymap.h"
 
 #include "iodev/virt_timer.h"
 #include "iodev/slowdown_timer.h"
 #include "iodev/sound/soundmod.h"
 #include "iodev/network/netmod.h"
 #include "iodev/usb/usb_common.h"
+#include "iodev/hdimage/hdimage.h"
 
 #define LOG_THIS bx_devices.
 
@@ -59,21 +61,26 @@ bx_devices_c::bx_devices_c()
   for (unsigned i=0; i < BX_MAX_IRQS; i++) {
     irq_handler_name[i] = NULL;
   }
+  sound_device_count = 0;
 }
 
 bx_devices_c::~bx_devices_c()
 {
-  // nothing needed for now
   timer_handle = BX_NULL_TIMER_HANDLE;
+  bx_hdimage_ctl.exit();
+#if BX_NETWORKING
+  bx_netmod_ctl.exit();
+#endif
+#if BX_SUPPORT_SOUNDLOW
+  bx_soundmod_ctl.exit();
+#endif
 }
 
 void bx_devices_c::init_stubs()
 {
   pluginCmosDevice = &stubCmos;
   pluginDmaDevice = &stubDma;
-  pluginFloppyDevice = &stubFloppy;
   pluginHardDrive = &stubHardDrive;
-  pluginKeyboard = &stubKeyboard;
   pluginPicDevice = &stubPic;
   pluginPitDevice = &stubPit;
   pluginSpeaker = &stubSpeaker;
@@ -100,11 +107,12 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   unsigned chipset = SIM->get_param_enum(BXPN_PCI_CHIPSET)->get();
   unsigned max_pci_slots = BX_N_PCI_SLOTS;
 #endif
-  unsigned i;
+  unsigned i, argc;
   const char def_name[] = "Default";
-  const char *vga_ext;
+  const char *vga_ext, *options;
+  char *argv[16];
 
-  BX_DEBUG(("Init $Id: devices.cc 13751 2019-12-30 07:16:46Z vruppert $"));
+  BX_DEBUG(("Init $Id: devices.cc 14129 2021-02-06 16:51:55Z vruppert $"));
   mem = newmem;
 
   /* set builtin default handlers, will be overwritten by the real default handler */
@@ -137,10 +145,13 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   }
 
   // removable devices init
-  bx_keyboard.dev = NULL;
-  bx_keyboard.gen_scancode = NULL;
+  for (i=0; i < 2; i++) {
+    bx_keyboard[i].dev = NULL;
+    bx_keyboard[i].gen_scancode = NULL;
+    bx_keyboard[i].led_mask = 0;
+  }
   for (i = 0; i < BX_KEY_NBKEYS; i++) {
-    bx_keyboard.bxkey_state[i] = 0;
+    bx_keyboard[0].bxkey_state[i] = 0;
   }
   for (i=0; i < 2; i++) {
     bx_mouse[i].dev = NULL;
@@ -151,32 +162,54 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   mouse_captured = SIM->get_param_bool(BXPN_MOUSE_ENABLED)->get();
   mouse_type = SIM->get_param_enum(BXPN_MOUSE_TYPE)->get();
 
+  // initialize paste feature
+  paste.buf = NULL;
+  paste.buf_len = 0;
+  paste.buf_ptr = 0;
+  paste.service = 0;
+  paste.stop = 0;
+  paste_delay_changed(SIM->get_param_num(BXPN_KBD_PASTE_DELAY)->get());
+
+  // init runtime parameters
+  SIM->get_param_num(BXPN_KBD_PASTE_DELAY)->set_handler(param_handler);
+  SIM->get_param_num(BXPN_MOUSE_ENABLED)->set_handler(param_handler);
+
   // register as soon as possible - the devices want to have their timers !
   bx_virt_timer.init();
   bx_slowdown_timer.init();
 
-  // BBD: At present, the only difference between "core" and "optional"
-  // plugins is that initialization and reset of optional plugins is handled
-  // by the plugin device list ().  Init and reset of core plugins is done
-  // "by hand" in this file.  Basically, we're using core plugins when we
-  // want to control the init order.
-  //
-  PLUG_load_plugin(hdimage, PLUGTYPE_CORE);
-#if BX_NETWORKING
-  network_enabled = is_network_enabled();
-  if (network_enabled)
-    bx_netmod_ctl.init();
-#endif
 #if BX_SUPPORT_SOUNDLOW
-  sound_enabled = is_sound_enabled();
-  if (sound_enabled) {
-    bx_soundmod_ctl.init();
+  if (sound_device_count > 0) {
+    bx_soundmod_ctl.open_output();
   }
 #endif
   // PCI logic (i440FX)
+  memset(argv, 0, sizeof(argv));
   pci.enabled = SIM->get_param_bool(BXPN_PCI_ENABLED)->get();
   if (pci.enabled) {
 #if BX_SUPPORT_PCI
+    if (chipset == BX_PCI_CHIPSET_I430FX) {
+      pci.advopts = (BX_PCI_ADVOPT_NOHPET | BX_PCI_ADVOPT_NOACPI);
+    } else {
+      pci.advopts = 0;
+    }
+    options = SIM->get_param_string(BXPN_PCI_ADV_OPTS)->getptr();
+    argc = bx_split_option_list("PCI advanced options", options, argv, 16);
+    for (i = 0; i < argc; i++) {
+      if (!strcmp(argv[i], "noacpi")) {
+        if (chipset == BX_PCI_CHIPSET_I440FX) {
+          pci.advopts = BX_PCI_ADVOPT_NOACPI;
+        } else {
+          BX_ERROR(("Disabling ACPI not supported by PCI chipset"));
+        }
+      } else if (!strcmp(argv[i], "nohpet")) {
+        pci.advopts = BX_PCI_ADVOPT_NOHPET;
+      } else {
+        BX_ERROR(("Unknown advanced PCI option '%s'", argv[i]));
+      }
+      free(argv[i]);
+      argv[i] = NULL;
+    }
     PLUG_load_plugin(pci, PLUGTYPE_CORE);
     PLUG_load_plugin(pci2isa, PLUGTYPE_CORE);
 #if BX_SUPPORT_PCIUSB
@@ -187,15 +220,15 @@ void bx_devices_c::init(BX_MEM_C *newmem)
         (chipset == BX_PCI_CHIPSET_I440BX)) {
       // UHCI is a part of the PIIX3/PIIX4, so load / enable it
       if (!PLUG_device_present("usb_uhci")) {
-        PLUG_load_plugin(usb_uhci, PLUGTYPE_OPTIONAL);
+        SIM->opt_plugin_ctrl("usb_uhci", 1);
       }
       SIM->get_param_bool(BXPN_UHCI_ENABLED)->set(1);
     }
 #endif
-    if (chipset != BX_PCI_CHIPSET_I430FX) {
+    if ((pci.advopts & BX_PCI_ADVOPT_NOACPI) == 0) {
       PLUG_load_plugin(acpi, PLUGTYPE_STANDARD);
     }
-    if (chipset == BX_PCI_CHIPSET_I440FX) {
+    if ((pci.advopts & BX_PCI_ADVOPT_NOHPET) == 0) {
       PLUG_load_plugin(hpet, PLUGTYPE_STANDARD);
     }
 #else
@@ -227,7 +260,7 @@ void bx_devices_c::init(BX_MEM_C *newmem)
 #if BX_SUPPORT_BUSMOUSE
   if ((mouse_type == BX_MOUSE_TYPE_INPORT) ||
       (mouse_type == BX_MOUSE_TYPE_BUS)) {
-    PLUG_load_plugin(busmouse, PLUGTYPE_OPTIONAL);
+    SIM->opt_plugin_ctrl("busmouse", 1);
   }
 #endif
   if (is_harddrv_enabled()) {
@@ -261,13 +294,19 @@ void bx_devices_c::init(BX_MEM_C *newmem)
       pci.slot_used[i] = 0;  // no device connected
     }
 
+    if (chipset == BX_PCI_CHIPSET_I440BX) {
+      pci.map_slot_to_dev = 8;
+    } else {
+      pci.map_slot_to_dev = 2;
+    }
+
     // confAddr accepts dword i/o only
-    DEV_register_ioread_handler(this, read_handler, 0x0CF8, "i440FX", 4);
-    DEV_register_iowrite_handler(this, write_handler, 0x0CF8, "i440FX", 4);
+    DEV_register_ioread_handler(this, read_handler, 0x0CF8, "PCI confAddr", 4);
+    DEV_register_iowrite_handler(this, write_handler, 0x0CF8, "PCI confAddr", 4);
 
     for (i=0x0CFC; i<=0x0CFF; i++) {
-      DEV_register_ioread_handler(this, read_handler, i, "i440FX", 7);
-      DEV_register_iowrite_handler(this, write_handler, i, "i440FX", 7);
+      DEV_register_ioread_handler(this, read_handler, i, "PCI confData", 7);
+      DEV_register_iowrite_handler(this, write_handler, i, "PCI confData", 7);
     }
   }
 #endif
@@ -299,9 +338,16 @@ void bx_devices_c::init(BX_MEM_C *newmem)
     DEV_cmos_set_reg(0x5d, memory_above_4gb >> 32);
   }
 
-  // TODO: add support for a comma-separated list of BIOS options
-  if (!strcmp(SIM->get_param_string(BXPN_ROM_OPTIONS)->getptr(), "fastboot")) {
-    DEV_cmos_set_reg(0x3f, 0x01);
+  options = SIM->get_param_string(BXPN_ROM_OPTIONS)->getptr();
+  argc = bx_split_option_list("ROM image options", options, argv, 16);
+  for (i = 0; i < argc; i++) {
+    if (!strcmp(argv[i], "fastboot")) {
+      DEV_cmos_set_reg(0x3f, 0x01);
+    } else {
+      BX_ERROR(("Unknown ROM image option '%s'", argv[i]));
+    }
+    free(argv[i]);
+    argv[i] = NULL;
   }
 
   if (timer_handle != BX_NULL_TIMER_HANDLE) {
@@ -353,6 +399,9 @@ void bx_devices_c::reset(unsigned type)
   mem->disable_smram();
   bx_reset_plugins(type);
   release_keys();
+  if (paste.buf != NULL) {
+    paste.stop = 1;
+  }
 }
 
 void bx_devices_c::register_state()
@@ -400,22 +449,22 @@ void bx_devices_c::exit()
   bx_virt_timer.setup();
   bx_slowdown_timer.exit();
 
-  // unload optional and user plugins first
+  // unload optional plugins first
   bx_unload_plugins();
   bx_unload_core_plugins();
-  PLUG_unload_plugin(hdimage);
-#if BX_NETWORKING
-  if (network_enabled)
-    bx_netmod_ctl.exit();
-#endif
-#if BX_SUPPORT_SOUNDLOW
-  if (sound_enabled)
-    bx_soundmod_ctl.exit();
-#endif
 #if BX_SUPPORT_PCIUSB
   if (usb_enabled)
     bx_usbdev_ctl.exit();
 #endif
+  // remove runtime parameter handlers
+  SIM->get_param_num(BXPN_KBD_PASTE_DELAY)->set_handler(NULL);
+  SIM->get_param_num(BXPN_MOUSE_ENABLED)->set_handler(NULL);
+  if (paste.buf != NULL) {
+    delete [] paste.buf;
+    paste.buf = NULL;
+  }
+  bx_keyboard[0].dev = NULL;
+  bx_mouse[0].dev = NULL;
   init_stubs();
 }
 
@@ -569,12 +618,18 @@ void bx_devices_c::timer_handler(void *this_ptr)
 
 void bx_devices_c::timer()
 {
+  if (++paste.counter >= paste.delay) {
+    // after the paste delay, consider adding moving more chars
+    // from the paste buffer to the keyboard buffer.
+    service_paste_buf();
+    paste.counter = 0;
+  }
   SIM->periodic();
   if (!bx_pc_system.kill_bochs_request)
     bx_gui->handle_events();
 }
 
-bx_bool bx_devices_c::register_irq(unsigned irq, const char *name)
+bool bx_devices_c::register_irq(unsigned irq, const char *name)
 {
   if (irq >= BX_MAX_IRQS) {
     BX_PANIC(("IO device %s registered with IRQ=%d above %u",
@@ -590,7 +645,7 @@ bx_bool bx_devices_c::register_irq(unsigned irq, const char *name)
   return 1;
 }
 
-bx_bool bx_devices_c::unregister_irq(unsigned irq, const char *name)
+bool bx_devices_c::unregister_irq(unsigned irq, const char *name)
 {
   if (irq >= BX_MAX_IRQS) {
     BX_PANIC(("IO device %s tried to unregister IRQ %d above %u",
@@ -613,7 +668,7 @@ bx_bool bx_devices_c::unregister_irq(unsigned irq, const char *name)
   return 1;
 }
 
-bx_bool bx_devices_c::register_io_read_handler(void *this_ptr, bx_read_handler_t f,
+bool bx_devices_c::register_io_read_handler(void *this_ptr, bx_read_handler_t f,
                                                Bit32u addr, const char *name, Bit8u mask)
 {
   addr &= 0xffff;
@@ -665,7 +720,7 @@ bx_bool bx_devices_c::register_io_read_handler(void *this_ptr, bx_read_handler_t
   return 1; // address mapped successfully
 }
 
-bx_bool bx_devices_c::register_io_write_handler(void *this_ptr, bx_write_handler_t f,
+bool bx_devices_c::register_io_write_handler(void *this_ptr, bx_write_handler_t f,
                                                 Bit32u addr, const char *name, Bit8u mask)
 {
   addr &= 0xffff;
@@ -717,7 +772,7 @@ bx_bool bx_devices_c::register_io_write_handler(void *this_ptr, bx_write_handler
   return 1; // address mapped successfully
 }
 
-bx_bool bx_devices_c::register_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
+bool bx_devices_c::register_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
                                              Bit32u begin_addr, Bit32u end_addr,
                                              const char *name, Bit8u mask)
 {
@@ -781,7 +836,7 @@ bx_bool bx_devices_c::register_io_read_handler_range(void *this_ptr, bx_read_han
   return 1; // address mapped successfully
 }
 
-bx_bool bx_devices_c::register_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
+bool bx_devices_c::register_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
                                               Bit32u begin_addr, Bit32u end_addr,
                                               const char *name, Bit8u mask)
 {
@@ -847,7 +902,7 @@ bx_bool bx_devices_c::register_io_write_handler_range(void *this_ptr, bx_write_h
 
 
 // Registration of default handlers (mainly be the unmapped device)
-bx_bool bx_devices_c::register_default_io_read_handler(void *this_ptr, bx_read_handler_t f,
+bool bx_devices_c::register_default_io_read_handler(void *this_ptr, bx_read_handler_t f,
                                                const char *name, Bit8u mask)
 {
   io_read_handlers.funct = (void *)f;
@@ -862,7 +917,7 @@ bx_bool bx_devices_c::register_default_io_read_handler(void *this_ptr, bx_read_h
   return 1;
 }
 
-bx_bool bx_devices_c::register_default_io_write_handler(void *this_ptr, bx_write_handler_t f,
+bool bx_devices_c::register_default_io_write_handler(void *this_ptr, bx_write_handler_t f,
                                                 const char *name, Bit8u mask)
 {
   io_write_handlers.funct = (void *)f;
@@ -877,7 +932,7 @@ bx_bool bx_devices_c::register_default_io_write_handler(void *this_ptr, bx_write
   return 1;
 }
 
-bx_bool bx_devices_c::unregister_io_read_handler(void *this_ptr, bx_read_handler_t f,
+bool bx_devices_c::unregister_io_read_handler(void *this_ptr, bx_read_handler_t f,
                                          Bit32u addr, Bit8u mask)
 {
   addr &= 0xffff;
@@ -923,7 +978,7 @@ bx_bool bx_devices_c::unregister_io_read_handler(void *this_ptr, bx_read_handler
   return 1;
 }
 
-bx_bool bx_devices_c::unregister_io_write_handler(void *this_ptr, bx_write_handler_t f,
+bool bx_devices_c::unregister_io_write_handler(void *this_ptr, bx_write_handler_t f,
                                           Bit32u addr, Bit8u mask)
 {
   addr &= 0xffff;
@@ -957,13 +1012,13 @@ bx_bool bx_devices_c::unregister_io_write_handler(void *this_ptr, bx_write_handl
   return 1;
 }
 
-bx_bool bx_devices_c::unregister_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
+bool bx_devices_c::unregister_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
                                                Bit32u begin, Bit32u end, Bit8u mask)
 {
   begin &= 0xffff;
   end &= 0xffff;
   Bit32u addr;
-  bx_bool ret = 1;
+  bool ret = 1;
 
   /*
    * the easy way this time
@@ -975,13 +1030,13 @@ bx_bool bx_devices_c::unregister_io_read_handler_range(void *this_ptr, bx_read_h
   return ret;
 }
 
-bx_bool bx_devices_c::unregister_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
+bool bx_devices_c::unregister_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
                                                 Bit32u begin, Bit32u end, Bit8u mask)
 {
   begin &= 0xffff;
   end &= 0xffff;
   Bit32u addr;
-  bx_bool ret = 1;
+  bool ret = 1;
 
   /*
    * the easy way this time
@@ -1047,7 +1102,7 @@ bx_devices_c::outp(Bit16u addr, Bit32u value, unsigned io_len)
   }
 }
 
-bx_bool bx_devices_c::is_harddrv_enabled(void)
+bool bx_devices_c::is_harddrv_enabled(void)
 {
   char pname[24];
 
@@ -1059,27 +1114,17 @@ bx_bool bx_devices_c::is_harddrv_enabled(void)
   return 0;
 }
 
-bx_bool bx_devices_c::is_network_enabled(void)
+void bx_devices_c::add_sound_device(void)
 {
-  if (PLUG_device_present("e1000") ||
-      PLUG_device_present("ne2k") ||
-      PLUG_device_present("pcipnic")) {
-    return 1;
-  }
-  return 0;
+  sound_device_count++;
 }
 
-bx_bool bx_devices_c::is_sound_enabled(void)
+void bx_devices_c::remove_sound_device(void)
 {
-  if (PLUG_device_present("es1370") ||
-      PLUG_device_present("sb16") ||
-      PLUG_device_present("speaker")) {
-    return 1;
-  }
-  return 0;
+  sound_device_count--;
 }
 
-bx_bool bx_devices_c::is_usb_enabled(void)
+bool bx_devices_c::is_usb_enabled(void)
 {
   if (PLUG_device_present("usb_ohci") ||
       PLUG_device_present("usb_uhci") ||
@@ -1091,19 +1136,41 @@ bx_bool bx_devices_c::is_usb_enabled(void)
 }
 
 // removable keyboard/mouse registration
-void bx_devices_c::register_removable_keyboard(void *dev, bx_kbd_gen_scancode_t kbd_gen_scancode)
+void bx_devices_c::register_default_keyboard(void *dev, bx_kbd_gen_scancode_t kbd_gen_scancode,
+                                             bx_kbd_get_elements_t kbd_get_elements)
 {
-  if (bx_keyboard.dev == NULL) {
-    bx_keyboard.dev = dev;
-    bx_keyboard.gen_scancode = kbd_gen_scancode;
+  if (bx_keyboard[0].dev == NULL) {
+    bx_keyboard[0].dev = dev;
+    bx_keyboard[0].gen_scancode = kbd_gen_scancode;
+    bx_keyboard[0].get_elements = kbd_get_elements;
+    bx_keyboard[0].led_mask = BX_KBD_LED_MASK_ALL;
+    // add keyboard LEDs to the statusbar
+    statusbar_id[BX_KBD_LED_NUM] = bx_gui->register_statusitem("NUM");
+    statusbar_id[BX_KBD_LED_CAPS] = bx_gui->register_statusitem("CAPS");
+    statusbar_id[BX_KBD_LED_SCRL] = bx_gui->register_statusitem("SCRL");
+  }
+}
+
+void bx_devices_c::register_removable_keyboard(void *dev, bx_kbd_gen_scancode_t kbd_gen_scancode,
+                                               bx_kbd_get_elements_t kbd_get_elements,
+                                               Bit8u led_mask)
+{
+  if (bx_keyboard[1].dev == NULL) {
+    bx_keyboard[1].dev = dev;
+    bx_keyboard[1].gen_scancode = kbd_gen_scancode;
+    bx_keyboard[1].get_elements = kbd_get_elements;
+    bx_keyboard[0].led_mask &= ~led_mask;
+    bx_keyboard[1].led_mask = led_mask;
   }
 }
 
 void bx_devices_c::unregister_removable_keyboard(void *dev)
 {
-  if (dev == bx_keyboard.dev) {
-    bx_keyboard.dev = NULL;
-    bx_keyboard.gen_scancode = NULL;
+  if (dev == bx_keyboard[1].dev) {
+    bx_keyboard[1].dev = NULL;
+    bx_keyboard[1].gen_scancode = NULL;
+    bx_keyboard[0].led_mask |= bx_keyboard[1].led_mask;
+    bx_keyboard[1].led_mask = 0;
   }
 }
 
@@ -1139,29 +1206,137 @@ void bx_devices_c::unregister_removable_mouse(void *dev)
 // common keyboard device handlers
 void bx_devices_c::gen_scancode(Bit32u key)
 {
-  bx_bool ret = 0;
+  bool ret = 0;
 
-  bx_keyboard.bxkey_state[key & 0xff] = ((key & BX_KEY_RELEASED) == 0);
-  if (bx_keyboard.dev != NULL) {
-    ret = bx_keyboard.gen_scancode(bx_keyboard.dev, key);
+  bx_keyboard[0].bxkey_state[key & 0xff] = ((key & BX_KEY_RELEASED) == 0);
+  if ((paste.buf != NULL) && (!paste.service)) {
+    paste.stop = 1;
+    return;
   }
-  if (ret == 0) {
-    pluginKeyboard->gen_scancode(key);
+  if (bx_keyboard[1].dev != NULL) {
+    ret = bx_keyboard[1].gen_scancode(bx_keyboard[1].dev, key);
   }
+  if ((ret == 0) && (bx_keyboard[0].dev != NULL)) {
+    bx_keyboard[0].gen_scancode(bx_keyboard[0].dev, key);
+  }
+}
+
+Bit8u bx_devices_c::kbd_get_elements(void)
+{
+  if (bx_keyboard[1].dev != NULL) {
+    return bx_keyboard[1].get_elements(bx_keyboard[1].dev);
+  }
+  if (bx_keyboard[0].dev != NULL) {
+    return bx_keyboard[0].get_elements(bx_keyboard[0].dev);
+  }
+  return BX_KBD_ELEMENTS;
 }
 
 void bx_devices_c::release_keys()
 {
   for (int i = 0; i < BX_KEY_NBKEYS; i++) {
-    if (bx_keyboard.bxkey_state[i]) {
+    if (bx_keyboard[0].bxkey_state[i]) {
       gen_scancode(i | BX_KEY_RELEASED);
-      bx_keyboard.bxkey_state[i] = 0;
+      bx_keyboard[0].bxkey_state[i] = 0;
     }
   }
 }
 
+// service_paste_buf() transfers data from the paste buffer to the hardware
+// keyboard buffer.  It tries to transfer as many chars as possible at a
+// time, but because different chars require different numbers of scancodes
+// we have to be conservative.  Note that this process depends on the
+// keymap tables to know what chars correspond to what keys, and which
+// chars require a shift or other modifier.
+void bx_devices_c::service_paste_buf()
+{
+  if (!paste.buf) return;
+  BX_DEBUG(("service_paste_buf: ptr at %d out of %d", paste.buf_ptr, paste.buf_len));
+  int fill_threshold = 8;
+  paste.service = 1;
+  while ((paste.buf_ptr < paste.buf_len) && !paste.stop) {
+    if (kbd_get_elements() >= fill_threshold) {
+      paste.service = 0;
+      return;
+    }
+    // there room in the buffer for a keypress and a key release.
+    // send one keypress and a key release.
+    Bit8u byte = paste.buf[paste.buf_ptr];
+    BXKeyEntry *entry = bx_keymap.findAsciiChar(byte);
+    if (!entry) {
+      BX_ERROR(("paste character 0x%02x ignored", byte));
+    } else {
+      BX_DEBUG(("pasting character 0x%02x. baseKey is %04x", byte, entry->baseKey));
+      if (entry->modKey != BX_KEYMAP_UNKNOWN)
+        gen_scancode(entry->modKey);
+      gen_scancode(entry->baseKey);
+      gen_scancode(entry->baseKey | BX_KEY_RELEASED);
+      if (entry->modKey != BX_KEYMAP_UNKNOWN)
+        gen_scancode(entry->modKey | BX_KEY_RELEASED);
+    }
+    paste.buf_ptr++;
+  }
+  // reached end of pastebuf.  free the memory it was using.
+  delete [] paste.buf;
+  paste.buf = NULL;
+  paste.stop = 0;
+  paste.service = 0;
+}
+
+// paste_bytes schedules an arbitrary number of ASCII characters to be
+// inserted into the hardware queue as it become available.  Any previous
+// paste which is still in progress will be thrown out.  BYTES is a pointer
+// to a region of memory containing the chars to be pasted. When the paste
+// is complete, the keyboard code will call delete [] bytes;
+void bx_devices_c::paste_bytes(Bit8u *data, Bit32s length)
+{
+  BX_DEBUG(("paste_bytes: %d bytes", length));
+  if (paste.buf) {
+    BX_ERROR(("previous paste was not completed!  %d chars lost",
+      paste.buf_len - paste.buf_ptr));
+    delete [] paste.buf;  // free the old paste buffer
+  }
+  paste.buf = data;
+  paste.buf_ptr = 0;
+  paste.buf_len = length;
+  service_paste_buf();
+}
+
+Bit64s bx_devices_c::param_handler(bx_param_c *param, int set, Bit64s val)
+{
+  if (set) {
+    char pname[BX_PATHNAME_LEN];
+    param->get_param_path(pname, BX_PATHNAME_LEN);
+    if (set) {
+      if (!strcmp(pname, BXPN_KBD_PASTE_DELAY)) {
+        bx_devices.paste_delay_changed((Bit32u)val);
+      } else if (!strcmp(pname, BXPN_MOUSE_ENABLED)) {
+        bx_gui->mouse_enabled_changed(val!=0);
+        bx_devices.mouse_enabled_changed(val!=0);
+      } else {
+        BX_PANIC(("param_handler called with unexpected parameter '%s'", pname));
+      }
+    }
+  }
+  return val;
+}
+
+void bx_devices_c::paste_delay_changed(Bit32u value)
+{
+  paste.delay = value / BX_IODEV_HANDLER_PERIOD;
+  paste.counter = 0;
+  BX_INFO(("will paste characters every %d iodev timer ticks", paste.delay));
+}
+
+void bx_devices_c::kbd_set_indicator(Bit8u devid, Bit8u ledid, bool state)
+{
+  if (bx_keyboard[devid].led_mask & (1 << ledid)) {
+    bx_gui->statusbar_setitem(statusbar_id[ledid], state, devid);
+  }
+}
+
 // common mouse device handlers
-void bx_devices_c::mouse_enabled_changed(bx_bool enabled)
+void bx_devices_c::mouse_enabled_changed(bool enabled)
 {
   mouse_captured = enabled;
 
@@ -1175,7 +1350,7 @@ void bx_devices_c::mouse_enabled_changed(bx_bool enabled)
   }
 }
 
-void bx_devices_c::mouse_motion(int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy)
+void bx_devices_c::mouse_motion(int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy)
 {
   // If mouse events are disabled on the GUI headerbar, don't
   // generate any mouse data
@@ -1196,11 +1371,11 @@ void bx_devices_c::mouse_motion(int delta_x, int delta_y, int delta_z, unsigned 
 
 #if BX_SUPPORT_PCI
 // generic PCI support
-bx_bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
+bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
                                             Bit8u *devfunc, const char *name,
                                             const char *descr, Bit8u bus)
 {
-  unsigned i, offset, handle, max_pci_slots = BX_N_PCI_SLOTS;
+  unsigned i, handle, max_pci_slots = BX_N_PCI_SLOTS;
   int first_free_slot = -1;
   Bit16u bus_devfunc = *devfunc;
   char devname[80];
@@ -1209,18 +1384,15 @@ bx_bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
   if (strcmp(name, "pci") && strcmp(name, "pci2isa") && strcmp(name, "pci_ide")
       && ((*devfunc & 0xf8) == 0x00)) {
     if (SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX) {
-      offset = 8;
       max_pci_slots = 4;
-    } else {
-      offset = 2;
     }
     if (bus == 0) {
       for (i = 0; i < max_pci_slots; i++) {
         sprintf(devname, "pci.slot.%d", i+1);
         device = SIM->get_param_string(devname)->getptr();
         if (strlen(device) > 0) {
-          if (!strcmp(name, device)) {
-            *devfunc = ((i + offset) << 3) | (*devfunc & 0x07);
+          if (!strcmp(name, device) && !pci.slot_used[i]) {
+            *devfunc = ((i + pci.map_slot_to_dev) << 3) | (*devfunc & 0x07);
             pci.slot_used[i] = 1;
             BX_INFO(("PCI slot #%d used by plugin '%s'", i+1, name));
             break;
@@ -1235,7 +1407,7 @@ bx_bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
           i = (unsigned)first_free_slot;
           sprintf(devname, "pci.slot.%d", i+1);
           SIM->get_param_string(devname)->set(name);
-          *devfunc = ((i + offset) << 3) | (*devfunc & 0x07);
+          *devfunc = ((i + pci.map_slot_to_dev) << 3) | (*devfunc & 0x07);
           pci.slot_used[i] = 1;
           BX_INFO(("PCI slot #%d used by plugin '%s'", i+1, name));
         } else {
@@ -1275,7 +1447,7 @@ bx_bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
   }
 }
 
-bx_bool bx_devices_c::pci_set_base_mem(void *this_ptr, memory_handler_t f1, memory_handler_t f2,
+bool bx_devices_c::pci_set_base_mem(void *this_ptr, memory_handler_t f1, memory_handler_t f2,
                                        Bit32u *addr, Bit8u *pci_conf, unsigned size)
 {
   Bit32u oldbase = *addr, newbase;
@@ -1303,7 +1475,7 @@ bx_bool bx_devices_c::pci_set_base_mem(void *this_ptr, memory_handler_t f1, memo
   return 0;
 }
 
-bx_bool bx_devices_c::pci_set_base_io(void *this_ptr, bx_read_handler_t f1, bx_write_handler_t f2,
+bool bx_devices_c::pci_set_base_io(void *this_ptr, bx_read_handler_t f1, bx_write_handler_t f2,
                                       Bit32u *addr, Bit8u *pci_conf, unsigned size,
                                       const Bit8u *iomask, const char *name)
 {
@@ -1475,7 +1647,7 @@ void bx_pci_device_c::load_pci_rom(const char *path)
 void bx_pci_device_c::pci_write_handler_common(Bit8u address, Bit32u value, unsigned io_len)
 {
   Bit8u bnum, value8, oldval;
-  bx_bool bar_change = 0, rom_change = 0;
+  bool bar_change = 0, rom_change = 0;
 
   // ignore readonly registers
   if ((address < 4) || ((address > 7) && (address < 12)) || (address == 14) ||

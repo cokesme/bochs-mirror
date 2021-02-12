@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.c 13752 2019-12-30 13:16:18Z vruppert $
+// $Id: rombios.c 13978 2020-10-13 08:05:48Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2019  The Bochs Project
+//  Copyright (C) 2001-2020  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -928,9 +928,9 @@ Bit16u cdrom_boot();
 
 #endif // BX_ELTORITO_BOOT
 
-static char bios_svn_version_string[] = "$Revision: 13752 $ $Date: 2019-12-30 14:16:18 +0100 (Mon, 30 Dec 2019) $";
+static char bios_svn_version_string[] = "$Revision: 13978 $ $Date: 2020-10-13 01:05:48 -0700 (Tue, 13 Oct 2020) $";
 
-#define BIOS_COPYRIGHT_STRING "(c) 2001-2018  The Bochs Project"
+#define BIOS_COPYRIGHT_STRING "(c) 2001-2020  The Bochs Project"
 
 #if DEBUG_ATA
 #  define BX_DEBUG_ATA(a...) BX_DEBUG(a)
@@ -10214,7 +10214,7 @@ enable_iomem_space:
   call pcibios_init_sel_reg
   mov  dx, #0x0cfc
   in   al, dx
-  or   al, #0x07
+  or   al, #0x03
   out  dx, al
 next_pci_dev:
   mov  byte ptr[bp-8], #0x10

@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hub.cc 13590 2019-11-08 13:49:48Z vruppert $
+// $Id: usb_hub.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB hub emulation support (ported from QEMU)
 //
 // Copyright (C) 2005       Fabrice Bellard
-// Copyright (C) 2009-2019  The Bochs Project
+// Copyright (C) 2009-2021  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,16 +39,14 @@
 
 #define LOG_THIS
 
-// USB device plugin entry points
+// USB device plugin entry point
 
-int CDECL libusb_hub_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_hub)
 {
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_USB;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_hub_dev_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 //
@@ -194,7 +192,7 @@ static const Bit8u bx_hub_hub_descriptor[] =
   /* DeviceRemovable and PortPwrCtrlMask patched in later */
 };
 
-static int hub_count = 0;
+static Bit8u hub_count = 0;
 
 
 void usb_hub_restore_handler(void *dev, bx_list_c *conf);
@@ -234,8 +232,8 @@ usb_hub_device_c::usb_hub_device_c(Bit8u ports)
 
   // config options
   bx_list_c *usb_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_USB);
-  sprintf(pname, "exthub%d", ++hub_count);
-  sprintf(label, "External Hub #%d Configuration", hub_count);
+  sprintf(pname, "exthub%u", ++hub_count);
+  sprintf(label, "External Hub #%u Configuration", hub_count);
   hub.config = new bx_list_c(usb_rt, pname, label);
   hub.config->set_options(bx_list_c::SHOW_PARENT);
   hub.config->set_device_param(this);
@@ -596,7 +594,7 @@ void usb_hub_device_c::event_handler(int event, USBPacket *packet, int port)
   }
 }
 
-void usb_hub_device_c::usb_set_connect_status(Bit8u port, int type, bx_bool connected)
+void usb_hub_device_c::usb_set_connect_status(Bit8u port, int type, bool connected)
 {
   usb_device_c *device = hub.usb_port[port].device;
   if (device != NULL) {
@@ -692,7 +690,7 @@ const char *usb_hub_device_c::hub_param_handler(bx_param_string_c *param, int se
     if (hub != NULL) {
       hubnum = atoi(port->get_parent()->get_name()+6);
       portnum = atoi(port->get_name()+4) - 1;
-      bx_bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
+      bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
       if ((portnum >= 0) && (portnum < hub->hub.n_ports)) {
         if (empty && (hub->hub.usb_port[portnum].PortStatus & PORT_STAT_CONNECTION)) {
           BX_INFO(("USB hub #%d, port #%d: device disconnect", hubnum, portnum+1));

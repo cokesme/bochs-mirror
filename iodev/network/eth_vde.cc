@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_vde.cc 13257 2017-06-16 08:27:55Z vruppert $
+// $Id: eth_vde.cc 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003       Renzo Davoli
-//  Copyright (C) 2003-2017  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -34,17 +34,14 @@
 
 #if BX_NETWORKING && BX_NETMOD_VDE
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libvde_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(vde)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libvde_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -95,7 +92,9 @@ private:
   int rx_timer_index;
   static void rx_timer_handler(void *);
   void rx_timer();
+#if BX_ETH_VDE_LOGGING
   FILE *txlog, *txlog_txt, *rxlog, *rxlog_txt;
+#endif
   int fddata;
   struct sockaddr_un dataout;
 };
