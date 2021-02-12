@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.cc 13616 2019-11-23 15:15:50Z sshwarts $
+// $Id: siminterface.cc 13652 2019-12-09 15:18:47Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2018  The Bochs Project
@@ -1545,7 +1545,7 @@ int bx_real_sim_c::bx_printf(const char *fmt, ...)
       return bx_gui->bx_printf(buf);
     }
   }
-  return printf(buf);
+  return printf("%s", buf);
 }
 
 char* bx_real_sim_c::bx_gets(char *s, int size, FILE *stream)
