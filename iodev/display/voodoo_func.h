@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo_func.h 14297 2021-07-01 19:32:28Z vruppert $
+// $Id: voodoo_func.h 14339 2021-08-24 19:06:01Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  *  Portion of this software comes with the following license
@@ -1627,7 +1627,7 @@ void voodoo2_bitblt_cpu_to_screen(Bit32u data)
     if (rgbfmt & 1) {
       BX_ERROR(("Voodoo bitBLT: color order other than RGB not supported yet"));
     }
-#if BX_BIG_ENDIAN
+#ifdef BX_BIG_ENDIAN
     data = bx_bswap32(data);
 #endif
     src_ptr = (Bit8u*)&data;

@@ -928,7 +928,7 @@ Bit16u cdrom_boot();
 
 #endif // BX_ELTORITO_BOOT
 
-static char bios_svn_version_string[] = "$Revision: 14314 $ $Date: 2021-07-14 18:10:19 +0200 (Mi, 14. Jul 2021) $";
+static char bios_svn_version_string[] = "$Revision: 14314 $ $Date: 2021-07-14 16:10:19 +0000 (Wed, 14 Jul 2021) $";
 
 #define BIOS_COPYRIGHT_STRING "(c) 2001-2021  The Bochs Project"
 

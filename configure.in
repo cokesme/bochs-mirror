@@ -2,20 +2,20 @@ dnl // Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.50)
 AC_INIT(bochs.h)
-AC_REVISION([[$Id: configure.in 14330 2021-08-01 08:07:38Z vruppert $]])
+AC_REVISION([[$Id: configure.in 14338 2021-08-08 16:03:16Z vruppert $]])
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_HEADER(ltdlconf.h)
 
 dnl // Put Bochs version information right here so that it gets substituted
 dnl // into all the right places.
-VERSION="2.7"
+VERSION="2.7.svn"
 VER_MAJOR=2
 VER_MINOR=7
 dnl // this should be > 90 for pre-release of next version otherwise revision level
 VER_REVISION=0
 dnl // this should be 0 for release and 1 for svn version
-VER_SVN=0
-REL_STRING="Built from SVN snapshot on August  1, 2021"
+VER_SVN=1
+REL_STRING="Built from SVN snapshot after release 2.7"
 REL_TIMESTAMP=`grep "Updated:" $srcdir/README | sed 's/Updated: //'`
 
 changequote(<<, >>)
