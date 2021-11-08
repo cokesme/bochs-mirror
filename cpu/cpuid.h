@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpuid.h 14086 2021-01-30 08:35:35Z sshwarts $
+// $Id: cpuid.h 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2010-2020 Stanislav Shwartsman
@@ -110,6 +110,9 @@ protected:
 #if BX_CPU_LEVEL >= 6
   void get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *leaf) const;
 #endif
+
+  Bit32u get_std_cpuid_leaf_7_ebx(Bit32u extra = 0) const;
+  Bit32u get_std_cpuid_leaf_7_ecx(Bit32u extra = 0) const;
 
   void get_ext_cpuid_leaf_8(cpuid_function_t *leaf) const;
 

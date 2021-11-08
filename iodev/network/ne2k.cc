@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ne2k.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: ne2k.cc 14284 2021-06-17 21:04:35Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -130,6 +130,13 @@ Bit32s ne2k_options_parser(const char *context, int num_params, char *params[])
       // MAC address is already initialized
       valid |= 0x04;
     }
+    if (card == 0) {
+      if (SIM->is_pci_device("ne2k")) {
+        SIM->get_param_enum("type", base)->set(BX_NE2K_TYPE_PCI);
+      } else {
+        SIM->get_param_enum("type", base)->set(BX_NE2K_TYPE_ISA);
+      }
+    }
     for (int i = first; i < num_params; i++) {
       if (!strncmp(params[i], "type=", 5)) {
         SIM->get_param_enum("type", base)->set_by_name(&params[i][5]);
@@ -147,10 +154,7 @@ Bit32s ne2k_options_parser(const char *context, int num_params, char *params[])
         }
       }
     }
-    if (((valid & 0x08) == 0) && (card == 0) && SIM->is_pci_device("ne2k")) {
-      SIM->get_param_enum("type", base)->set(BX_NE2K_TYPE_PCI);
-      valid |= 0x10;
-    } else if (SIM->get_param_enum("type", base)->get() == BX_NE2K_TYPE_PCI) {
+    if (SIM->get_param_enum("type", base)->get() == BX_NE2K_TYPE_PCI) {
       valid |= 0x10;
     }
     if ((valid & 0xc0) == 0) {
@@ -208,8 +212,10 @@ PLUGIN_ENTRY_FOR_MODULE(ne2k)
       network->remove(name);
     }
     delete NE2kDevMain;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
   return(0); // Success
 }
@@ -314,7 +320,7 @@ void bx_ne2k_c::init(Bit8u card)
   Bit8u macaddr[6];
   bx_param_string_c *bootrom;
 
-  BX_DEBUG(("Init $Id: ne2k.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: ne2k.cc 14284 2021-06-17 21:04:35Z vruppert $"));
 
   // Read in values from config interface
   sprintf(pname, "%s%d", BXPN_NE2K, card);

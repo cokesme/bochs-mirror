@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: e1000.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: e1000.cc 14312 2021-07-12 19:05:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Intel(R) 82540EM Gigabit Ethernet support (ported from QEMU)
@@ -384,8 +384,10 @@ PLUGIN_ENTRY_FOR_MODULE(e1000)
       network->remove(name);
     }
     delete E1000DevMain;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
   return 0; // Success
 }
@@ -714,7 +716,7 @@ bool bx_e1000_c::mem_read(bx_phy_address addr, unsigned len, void *data)
 
   if (BX_E1000_THIS pci_rom_size > 0) {
     Bit32u mask = (BX_E1000_THIS pci_rom_size - 1);
-    if ((addr & ~mask) == BX_E1000_THIS pci_rom_address) {
+    if (((Bit32u)addr & ~mask) == BX_E1000_THIS pci_rom_address) {
 #ifdef BX_LITTLE_ENDIAN
       data8_ptr = (Bit8u *) data;
 #else // BX_BIG_ENDIAN
@@ -1501,7 +1503,7 @@ void bx_e1000_c::rx_frame(const void *buf, unsigned buf_size)
         if (copy_size > BX_E1000_THIS s.rxbuf_size) {
           copy_size = BX_E1000_THIS s.rxbuf_size;
         }
-        DEV_MEM_WRITE_PHYSICAL_DMA(le64_to_cpu(desc.buffer_addr), copy_size,
+        DEV_MEM_WRITE_PHYSICAL_DMA(le64_to_cpu(desc.buffer_addr), (unsigned)copy_size,
                                    (Bit8u *)buf + desc_offset + vlan_offset);
       }
       desc_offset += desc_size;

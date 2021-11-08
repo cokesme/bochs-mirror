@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.cc 14129 2021-02-06 16:51:55Z vruppert $
+// $Id: siminterface.cc 14293 2021-06-27 14:50:26Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -71,8 +71,8 @@ class bx_real_sim_c : public bx_simulator_interface_c {
   void *ci_callback_data;
   rt_conf_entry_t *rt_conf_entries;
   addon_option_t *addon_options;
-  int init_done;
-  int enabled;
+  bool init_done;
+  bool enabled;
   // save context to jump to if we must quit unexpectedly
   jmp_buf *quit_context;
   int exit_code;
@@ -84,8 +84,8 @@ public:
   bx_real_sim_c();
   virtual ~bx_real_sim_c() {}
   virtual void set_quit_context(jmp_buf *context) { quit_context = context; }
-  virtual int get_init_done() { return init_done; }
-  virtual int set_init_done(int n) { init_done = n; return 0;}
+  virtual bool get_init_done() { return init_done; }
+  virtual int set_init_done(bool n);
   virtual void reset_all_param();
   // new param methods
   virtual bx_param_c *get_param(const char *pname, bx_param_c *base=NULL);
@@ -213,15 +213,21 @@ public:
   virtual bool restore_bochs_param(bx_list_c *root, const char *sr_path, const char *restore_name);
   // special config parameter and options functions for plugins
   virtual bool opt_plugin_ctrl(const char *plugname, bool load);
+#if BX_NETWORKING
   virtual void init_std_nic_options(const char *name, bx_list_c *menu);
+#endif
+#if BX_SUPPORT_PCIUSB
   virtual void init_usb_options(const char *usb_name, const char *pname, int maxports);
+#endif
   virtual int  parse_param_from_list(const char *context, const char *param, bx_list_c *base);
   virtual int  parse_nic_params(const char *context, const char *param, bx_list_c *base);
-  virtual int  parse_usb_port_params(const char *context, bool devopt,
-                                     const char *param, int maxports, bx_list_c *base);
+  virtual int  parse_usb_port_params(const char *context, const char *param,
+                                     int maxports, bx_list_c *base);
   virtual int  split_option_list(const char *msg, const char *rawopt, char **argv, int max_argv);
   virtual int  write_param_list(FILE *fp, bx_list_c *base, const char *optname, bool multiline);
+#if BX_SUPPORT_PCIUSB
   virtual int  write_usb_options(FILE *fp, int maxports, bx_list_c *base);
+#endif
 #if BX_USE_GUI_CONSOLE
   virtual int  bx_printf(const char *fmt, ...);
   virtual char* bx_gets(char *s, int size, FILE *stream);
@@ -365,6 +371,21 @@ bx_real_sim_c::bx_real_sim_c()
   param_id = BXP_NEW_PARAM_ID;
   rt_conf_entries = NULL;
   addon_options = NULL;
+}
+
+int bx_real_sim_c::set_init_done(bool n)
+{
+#if BX_USE_TEXTCONFIG
+  if (n) {
+    if (bx_gui->has_gui_console()) {
+      if (strcmp(registered_ci_name, "textconfig") != 0) {
+        PLUG_load_plugin(textconfig, PLUGTYPE_CORE);
+      }
+    }
+  }
+#endif
+  init_done = n;
+  return 0;
 }
 
 void bx_real_sim_c::reset_all_param()
@@ -757,7 +778,7 @@ bool bx_real_sim_c::is_pci_device(const char *name)
 #if BX_SUPPORT_PCI
   unsigned i, max_pci_slots = BX_N_PCI_SLOTS;
   char devname[80];
-  char *device;
+  const char *device;
 
   if (SIM->get_param_bool(BXPN_PCI_ENABLED)->get()) {
     if (SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX) {
@@ -765,8 +786,8 @@ bool bx_real_sim_c::is_pci_device(const char *name)
     }
     for (i = 0; i < max_pci_slots; i++) {
       sprintf(devname, "pci.slot.%d", i+1);
-      device = SIM->get_param_string(devname)->getptr();
-      if ((strlen(device) > 0) && (!strcmp(name, device))) {
+      device = SIM->get_param_enum(devname)->get_selected();
+      if (!strcmp(name, device)) {
         return 1;
       }
     }
@@ -778,10 +799,9 @@ bool bx_real_sim_c::is_pci_device(const char *name)
 bool bx_real_sim_c::is_agp_device(const char *name)
 {
 #if BX_SUPPORT_PCI
-  if (get_param_bool(BXPN_PCI_ENABLED)->get() &&
-      (SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX)) {
-    const char *device = SIM->get_param_string("pci.slot.5")->getptr();
-    if ((strlen(device) > 0) && (!strcmp(name, device))) {
+  if (get_param_bool(BXPN_PCI_ENABLED)->get() && DEV_agp_present()) {
+    const char *device = SIM->get_param_enum("pci.slot.5")->get_selected();
+    if (!strcmp(name, device)) {
       return 1;
     }
   }
@@ -846,17 +866,11 @@ void bx_real_sim_c::register_configuration_interface(
 
 int bx_real_sim_c::configuration_interface(const char *ignore, ci_command_t command)
 {
-  bx_param_enum_c *ci_param = SIM->get_param_enum(BXPN_SEL_CONFIG_INTERFACE);
-  const char *name = ci_param->get_selected();
   if (!ci_callback) {
     BX_PANIC(("no configuration interface was loaded"));
     return -1;
   }
-  if (strcmp(name, registered_ci_name) != 0) {
-    BX_PANIC(("siminterface does not support loading one configuration interface and then calling another"));
-    return -1;
-  }
-  if (!strcmp(name, "wx"))
+  if (!strcmp(registered_ci_name, "wx"))
     wxsel = 1;
   else
     wxsel = 0;
@@ -1271,14 +1285,18 @@ bool bx_real_sim_c::restore_bochs_param(bx_list_c *root, const char *sr_path, co
                   if (fp2 != NULL) {
                     FILE **fpp = ((bx_shadow_filedata_c*)param)->get_fpp();
                     // If the temporary backing store file wasn't created, do it now.
-                    if (*fpp == NULL)
-                      *fpp = tmpfile();
+                    if (*fpp == NULL) {
+                      *fpp = tmpfile64();
+                    } else {
+                      fseeko64(*fpp, 0, SEEK_SET);
+                    }
                     if (*fpp != NULL) {
+                      char *buffer = new char[4096];
                       while (!feof(fp2)) {
-                        char buffer[64];
-                        size_t chars = fread(buffer, 1, sizeof(buffer), fp2);
+                        size_t chars = fread(buffer, 1, 4096, fp2);
                         fwrite(buffer, 1, chars, *fpp);
                       }
+                      delete [] buffer;
                       fflush(*fpp);
                     }
                     ((bx_shadow_filedata_c*)param)->restore(fp2);
@@ -1391,12 +1409,13 @@ bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_pat
         FILE **fpp = ((bx_shadow_filedata_c*)node)->get_fpp();
         // If the backing store hasn't been created, just save an empty 0 byte placeholder file.
         if (*fpp != NULL) {
+          char *buffer = new char[4096];
+          fseeko64(*fpp, 0, SEEK_SET);
           while (!feof(*fpp)) {
-            char buffer[64];
-            size_t chars = fread (buffer, 1, sizeof(buffer), *fpp);
+            size_t chars = fread (buffer, 1, 4096, *fpp);
             fwrite(buffer, 1, chars, fp2);
           }
-          fflush(*fpp);
+          delete [] buffer;
         }
         ((bx_shadow_filedata_c*)node)->save(fp2);
         fclose(fp2);
@@ -1463,15 +1482,20 @@ bool bx_real_sim_c::opt_plugin_ctrl(const char *plugname, bool load)
   return 0;
 }
 
+#if BX_NETWORKING
 void bx_real_sim_c::init_std_nic_options(const char *name, bx_list_c *menu)
 {
   bx_init_std_nic_options(name, menu);
 }
+#endif
 
+#if BX_SUPPORT_PCIUSB
 void bx_real_sim_c::init_usb_options(const char *usb_name, const char *pname, int maxports)
 {
   bx_init_usb_options(usb_name, pname, maxports);
 }
+#endif
+
 
 int bx_real_sim_c::parse_param_from_list(const char *context, const char *param, bx_list_c *base)
 {
@@ -1483,10 +1507,10 @@ int bx_real_sim_c::parse_nic_params(const char *context, const char *param, bx_l
   return bx_parse_nic_params(context, param, base);
 }
 
-int bx_real_sim_c::parse_usb_port_params(const char *context, bool devopt,
-                                     const char *param, int maxports, bx_list_c *base)
+int bx_real_sim_c::parse_usb_port_params(const char *context, const char *param,
+                                         int maxports, bx_list_c *base)
 {
-  return bx_parse_usb_port_params(context, devopt, param, maxports, base);
+  return bx_parse_usb_port_params(context, param, maxports, base);
 }
 
 int bx_real_sim_c::split_option_list(const char *msg, const char *rawopt,
@@ -1500,10 +1524,12 @@ int bx_real_sim_c::write_param_list(FILE *fp, bx_list_c *base, const char *optna
   return bx_write_param_list(fp, base, optname, multiline);
 }
 
+#if BX_SUPPORT_PCIUSB
 int bx_real_sim_c::write_usb_options(FILE *fp, int maxports, bx_list_c *base)
 {
   return bx_write_usb_options(fp, maxports, base);
 }
+#endif
 
 #if BX_USE_GUI_CONSOLE
 int bx_real_sim_c::bx_printf(const char *fmt, ...)

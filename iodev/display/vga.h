@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vga.h 14119 2021-02-01 20:39:33Z vruppert $
+// $Id: vga.h 14261 2021-05-30 16:13:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -30,7 +30,6 @@
 #define VBE_DISPI_4BPP_PLANE_SHIFT       22
 
 #define VBE_DISPI_BANK_ADDRESS           0xA0000
-#define VBE_DISPI_BANK_SIZE_KB           64
 
 #define VBE_DISPI_MAX_XRES               2560
 #define VBE_DISPI_MAX_YRES               1600
@@ -69,9 +68,14 @@
 #define VBE_DISPI_DISABLED               0x00
 #define VBE_DISPI_ENABLED                0x01
 #define VBE_DISPI_GETCAPS                0x02
+#define VBE_DISPI_BANK_GRANULARITY_32K   0x10
 #define VBE_DISPI_8BIT_DAC               0x20
 #define VBE_DISPI_LFB_ENABLED            0x40
 #define VBE_DISPI_NOCLEARMEM             0x80
+
+#define VBE_DISPI_BANK_WR                0x4000
+#define VBE_DISPI_BANK_RD                0x8000
+#define VBE_DISPI_BANK_RW                0xc000
 
 #define VBE_DISPI_LFB_PHYSICAL_ADDRESS   0xE0000000
 
@@ -147,7 +151,8 @@ private:
     Bit16u  max_xres;
     Bit16u  max_yres;
     Bit16u  max_bpp;
-    Bit16u  bank;
+    Bit16u  bank[2];
+    Bit16u  bank_granularity_kb;
     bool    enabled;
     Bit16u  curindex;
     Bit32u  visible_screen_size; /**< in bytes */

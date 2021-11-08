@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paging.cc 14102 2021-01-30 20:13:34Z sshwarts $
+// $Id: paging.cc 14328 2021-07-27 19:18:34Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2019  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -655,7 +655,7 @@ int BX_CPU_C::check_entry_PAE(const char *s, Bit64u entry, Bit64u reserved, unsi
   if (entry & PAGE_DIRECTORY_NX_BIT) {
     if (rw == BX_EXECUTE) {
       BX_DEBUG(("PAE %s: non-executable page fault occurred", s));
-      *nx_fault = 1;
+      *nx_fault = true;
     }
   }
 
@@ -690,7 +690,7 @@ bx_phy_address BX_CPU_C::translate_linear_long_mode(bx_address laddr, Bit32u &lp
   Bit64u entry[4];
   BxMemtype entry_memtype[4] = { 0 };
 
-  bool nx_fault = 0;
+  bool nx_fault = false;
   int leaf;
 
   Bit64u offset_mask = BX_CONST64(0x0000ffffffffffff);
@@ -824,7 +824,7 @@ bx_phy_address BX_CPU_C::translate_linear_long_mode(bx_address laddr, Bit32u &lp
 
     unsigned priv_index = (BX_CPU_THIS_PTR cr0.get_WP() << 4) | // bit 4
                           (user<<3) |                           // bit 3
-                          (combined_access | isWrite);          // bit 2,1,0
+                          (combined_access | (unsigned)isWrite);// bit 2,1,0
 
     if (!priv_check[priv_index] || nx_fault)
       page_fault(ERROR_PROTECTION, laddr, user, rw);
@@ -984,7 +984,7 @@ bx_phy_address BX_CPU_C::translate_linear_PAE(bx_address laddr, Bit32u &lpf_mask
   bx_phy_address entry_addr[2];
   Bit64u entry[2];
   BxMemtype entry_memtype[2] = { 0 };
-  bool nx_fault = 0;
+  bool nx_fault = false;
   int leaf;
 
   lpf_mask = 0xfff;
@@ -1071,7 +1071,7 @@ bx_phy_address BX_CPU_C::translate_linear_PAE(bx_address laddr, Bit32u &lpf_mask
 
     unsigned priv_index = (BX_CPU_THIS_PTR cr0.get_WP() << 4) | // bit 4
                           (user<<3) |                           // bit 3
-                          (combined_access | isWrite);          // bit 2,1,0
+                          (combined_access | (unsigned)isWrite);// bit 2,1,0
 
     if (!priv_check[priv_index] || nx_fault)
       page_fault(ERROR_PROTECTION, laddr, user, rw);
@@ -1221,7 +1221,7 @@ bx_phy_address BX_CPU_C::translate_linear_legacy(bx_address laddr, Bit32u &lpf_m
         (BX_CPU_THIS_PTR cr0.get_WP() << 4) |   // bit 4
 #endif
         (user<<3) |                             // bit 3
-        (combined_access | isWrite);            // bit 2,1,0
+        (combined_access | (unsigned)isWrite);  // bit 2,1,0
 
     if (!priv_check[priv_index])
       page_fault(ERROR_PROTECTION, laddr, user, rw);
@@ -1381,6 +1381,9 @@ bx_phy_address BX_CPU_C::translate_linear(bx_TLB_entry *tlbEntry, bx_address lad
 #endif
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest && SVM_NESTED_PAGING_ENABLED) {
+    // hack: ignore isExecute attribute in SMM mode under SVM virtualization
+    if (BX_CPU_THIS_PTR in_smm && rw == BX_EXECUTE) rw = BX_READ;
+
     paddress = nested_walk(paddress, rw, 0);
   }
 #endif
@@ -1626,9 +1629,9 @@ void BX_CPU_C::nested_page_fault(unsigned fault, bx_phy_address guest_paddr, uns
     error_code |= ERROR_CODE_ACCESS; // I/D = 1
 
   if (is_page_walk)
-    error_code |= BX_CONST64(1) << 32;
-  else
     error_code |= BX_CONST64(1) << 33;
+  else
+    error_code |= BX_CONST64(1) << 32;
 
   Svm_Vmexit(SVM_VMEXIT_NPF, error_code, guest_paddr);
 }
@@ -1638,7 +1641,7 @@ bx_phy_address BX_CPU_C::nested_walk_long_mode(bx_phy_address guest_paddr, unsig
   bx_phy_address entry_addr[4];
   Bit64u entry[4];
   BxMemtype entry_memtype[4] = { BX_MEMTYPE_INVALID };
-  bool nx_fault = 0;
+  bool nx_fault = false;
   int leaf;
 
   SVM_CONTROLS *ctrls = &BX_CPU_THIS_PTR vmcb.ctrls;
@@ -1702,7 +1705,7 @@ bx_phy_address BX_CPU_C::nested_walk_PAE(bx_phy_address guest_paddr, unsigned rw
   bx_phy_address entry_addr[2];
   Bit64u entry[2];
   BxMemtype entry_memtype[2] = { BX_MEMTYPE_INVALID };
-  bool nx_fault = 0;
+  bool nx_fault = false;
   int leaf;
 
   unsigned combined_access = BX_COMBINED_ACCESS_WRITE | BX_COMBINED_ACCESS_USER;

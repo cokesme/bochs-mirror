@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sounddummy.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: sounddummy.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2011-2021  The Bochs Project
@@ -25,7 +25,8 @@
 
 // The dummy sound driver contains stubs for all features
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 
 #if BX_SUPPORT_SOUNDLOW
 

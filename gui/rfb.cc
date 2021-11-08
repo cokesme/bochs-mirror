@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rfb.cc 14094 2021-01-30 18:32:52Z vruppert $
+// $Id: rfb.cc 14277 2021-06-11 14:46:38Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2000  Psyon.Org!
@@ -232,6 +232,8 @@ void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
     }
   }
 
+  console.present = 1;
+
   // parse rfb specific options
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
@@ -247,6 +249,8 @@ void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
         BX_INFO(("hide IPS display in status bar"));
         rfbHideIPS = 1;
 #endif
+      } else if (!strcmp(argv[i], "no_gui_console")) {
+        console.present = 0;
       } else {
         BX_PANIC(("Unknown rfb option '%s'", argv[i]));
       }
@@ -308,7 +312,6 @@ void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 
   new_gfx_api = 1;
   new_text_api = 1;
-  console.present = 1;
 }
 
 void bx_rfb_gui_c::handle_events(void)

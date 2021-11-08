@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_xhci.h 14124 2021-02-04 20:15:13Z vruppert $
+// $Id: usb_xhci.h 14158 2021-02-20 19:58:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2010-2017  Benjamin D Lunt (fys [at] fysnet [dot] net)
@@ -545,9 +545,6 @@ public:
 
   void event_handler(int event, USBPacket *packet, int port);
 
-  static const char *usb_param_handler(bx_param_string_c *param, int set,
-                                       const char *oldval, const char *val, int maxlen);
-
 private:
   bx_usb_xhci_t hub;
   Bit8u         devfunc;
@@ -566,7 +563,7 @@ private:
 
   static void init_device(Bit8u port, bx_list_c *portconf);
   static void remove_device(Bit8u port);
-  static void usb_set_connect_status(Bit8u port, int type, bool connected);
+  static bool usb_set_connect_status(Bit8u port, bool connected);
 
   static int  broadcast_packet(USBPacket *p, const int port);
   static void xhci_timer_handler(void *);
@@ -605,6 +602,9 @@ private:
 
   static void runtime_config_handler(void *);
   void runtime_config(void);
+
+  static Bit64s usb_param_handler(bx_param_c *param, bool set, Bit64s val);
+  static bool usb_param_enable_handler(bx_param_c *param, bool en);
 };
 
 #endif  // BX_IODEV_USB_XHCI_H

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netutil.cc 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: netutil.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2004-2021  The Bochs Project
@@ -28,7 +28,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include "misc/bxcompat.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "pc_system.h"
 #endif
 
 #if BX_NETWORKING
@@ -219,7 +220,7 @@ vnet_server_c::~vnet_server_c()
 #endif
 }
 
-void vnet_server_c::init(bx_devmodel_c *_netdev, dhcp_cfg_t *dhcpc, const char *tftp_rootdir)
+void vnet_server_c::init(logfunctions *_netdev, dhcp_cfg_t *dhcpc, const char *tftp_rootdir)
 {
   netdev = _netdev;
   dhcp = dhcpc;

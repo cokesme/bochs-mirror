@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo.h 14119 2021-02-01 20:39:33Z vruppert $
+// $Id: voodoo.h 14303 2021-07-04 08:17:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2012-2021  The Bochs Project
@@ -160,7 +160,8 @@ private:
   void   blt_execute(void);
   void   blt_complete(void);
   bool   blt_apply_clipwindow(int *x0, int *y0, int *x1, int *y1, int *w, int *h);
-  Bit8u  colorkey_check(Bit8u *ptr, Bit8u pxsize, bool dst);
+  bool   blt_clip_check(int x, int y);
+  Bit8u  blt_colorkey_check(Bit8u *ptr, Bit8u pxsize, bool dst);
 
   void   blt_rectangle_fill(void);
   void   blt_pattern_fill_mono(void);
@@ -193,7 +194,7 @@ public:
                              unsigned width, unsigned height);
 
   virtual bool   init_vga_extension(void);
-  virtual void   get_crtc_params(bx_crtc_params_t *crtcp);
+  virtual void   get_crtc_params(bx_crtc_params_t *crtcp, Bit32u *vclock);
   Bit32u get_retrace(void);
 
   void banshee_update_mode(void);

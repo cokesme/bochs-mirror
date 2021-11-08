@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_ivy_bridge_3770K.cc 14100 2021-01-30 19:40:18Z sshwarts $
+// $Id: corei7_ivy_bridge_3770K.cc 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2013-2017 Stanislav Shwartsman
@@ -518,9 +518,7 @@ void corei7_ivy_bridge_3770k_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_f
     //   [19:19] ADCX/ADOX instructions support
     //   [20:20] SMAP: Supervisor Mode Access Prevention
     //   [31:21] reserved
-    leaf->ebx = BX_CPUID_EXT3_FSGSBASE | 
-                BX_CPUID_EXT3_SMEP | 
-                BX_CPUID_EXT3_ENCHANCED_REP_STRINGS;
+    leaf->ebx = get_std_cpuid_leaf_7_ebx(BX_CPUID_EXT3_ENCHANCED_REP_STRINGS);
     leaf->ecx = 0;
     leaf->edx = 0;
     break;

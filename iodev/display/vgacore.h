@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vgacore.h 14120 2021-02-03 18:08:04Z vruppert $
+// $Id: vgacore.h 14267 2021-06-04 12:14:45Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -101,10 +101,10 @@ public:
   virtual void   get_text_snapshot(Bit8u **text_snapshot, unsigned *txHeight,
                                    unsigned *txWidth);
   virtual bool   init_vga_extension(void) {return 0;}
-  virtual void   get_crtc_params(bx_crtc_params_t *crtcp);
+  virtual void   get_crtc_params(bx_crtc_params_t *crtcp, Bit32u *vclock);
 
   static void    vga_timer_handler(void *);
-  static Bit64s  vga_param_handler(bx_param_c *param, int set, Bit64s val);
+  static Bit64s  vga_param_handler(bx_param_c *param, bool set, Bit64s val);
 
 protected:
   void init_standard_vga(void);
@@ -243,8 +243,9 @@ protected:
     Bit32u vrend_usec;
     // shift values for extensions
     Bit8u  plane_shift;
-    Bit32u plane_offset;
     Bit8u  dac_shift;
+    Bit32u ext_offset;
+    bool   ext_y_dblsize;
     // last active resolution and bpp
     Bit16u last_xres;
     Bit16u last_yres;
@@ -266,7 +267,7 @@ protected:
   int timer_id;
   bool update_realtime;
   bool vsync_realtime;
-  bx_param_string_c *vgaext;
+  bx_param_enum_c *vga_ext;
   bool pci_enabled;
 };
 

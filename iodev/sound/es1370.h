@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: es1370.h 14116 2021-01-31 15:44:39Z vruppert $
+// $Id: es1370.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // ES1370 soundcard support (ported from QEMU)
@@ -94,8 +94,8 @@ public:
   virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 
   // runtime options
-  static Bit64s es1370_param_handler(bx_param_c *param, int set, Bit64s val);
-  static const char* es1370_param_string_handler(bx_param_string_c *param, int set,
+  static Bit64s es1370_param_handler(bx_param_c *param, bool set, Bit64s val);
+  static const char* es1370_param_string_handler(bx_param_string_c *param, bool set,
                                                  const char *oldval, const char *val,
                                                  int maxlen);
   static void runtime_config_handler(void *);

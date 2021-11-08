@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: config.cc 14138 2021-02-09 21:53:15Z vruppert $
+// $Id: config.cc 14312 2021-07-12 19:05:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -28,6 +28,9 @@
 #if BX_SUPPORT_SOUNDLOW
 #include "iodev/sound/soundmod.h"
 #endif
+#if BX_SUPPORT_PCIUSB
+#include "iodev/usb/usb_common.h"
+#endif
 #include "param_names.h"
 #include <assert.h>
 
@@ -43,7 +46,11 @@
 #endif
 
 
+const char **config_interface_list;
 const char **display_library_list;
+const char **vga_extension_names;
+const char **vga_extension_plugins;
+const char **pcislot_dev_list;
 int bochsrc_include_level = 0;
 
 #define LOG_THIS genlog->
@@ -55,16 +62,28 @@ static int parse_line_formatted(const char *context, int num_params, char *param
 static int parse_bochsrc(const char *rcfile);
 static int get_floppy_type_from_image(const char *filename);
 
-static Bit64s bx_param_handler(bx_param_c *param, int set, Bit64s val)
+int get_floppy_devtype_from_type(int type)
+{
+  switch (type) {
+    case BX_FLOPPY_2_88:
+      return BX_FDD_350ED;
+    case BX_FLOPPY_720K:
+    case BX_FLOPPY_1_44:
+      return BX_FDD_350HD;
+    default:
+      return BX_FDD_525HD;
+  }
+}
+
+static Bit64s bx_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   char pname[BX_PATHNAME_LEN];
-  Bit8u device;
-//Bit8u channel;
+  Bit8u device, vga_ext_id;
+  Bit64s oldval;
 
   bx_list_c *base = (bx_list_c*) param->get_parent();
   base->get_param_path(pname, BX_PATHNAME_LEN);
   if (!strncmp(pname, "ata.", 4)) {
-//  channel = pname[4] - '0';
     if (!strcmp(base->get_name(), "master")) {
       device = 0;
     } else {
@@ -87,24 +106,29 @@ static Bit64s bx_param_handler(bx_param_c *param, int set, Bit64s val)
     }
   } else {
     param->get_param_path(pname, BX_PATHNAME_LEN);
-    if ((!strcmp(pname, BXPN_FLOPPYA_TYPE)) ||
+    if (!strcmp(pname, BXPN_VGA_EXTENSION)) {
+      if (set) {
+        oldval = ((bx_param_enum_c*)param)->get();
+        if (val != oldval) {
+          vga_ext_id = (Bit8u)((bx_param_enum_c*)param)->get();
+          PLUG_unload_opt_plugin(vga_extension_plugins[vga_ext_id]);
+          PLUG_load_plugin_var(vga_extension_plugins[(Bit8u)val], PLUGTYPE_VGA);
+        }
+      }
+    } else if ((!strcmp(pname, BXPN_FLOPPYA_DEVTYPE)) ||
+        (!strcmp(pname, BXPN_FLOPPYB_DEVTYPE))) {
+      if ((set) && (val == BX_FDD_NONE)) {
+        SIM->get_param_enum("type", base)->set(BX_FLOPPY_NONE);
+        SIM->get_param_enum("status", base)->set(BX_EJECTED);
+      }
+    } else if ((!strcmp(pname, BXPN_FLOPPYA_TYPE)) ||
         (!strcmp(pname, BXPN_FLOPPYB_TYPE))) {
       if (set) {
         if (val == BX_FLOPPY_AUTO) {
           val = get_floppy_type_from_image(SIM->get_param_string("path", base)->getptr());
           SIM->get_param_enum("type", base)->set(val);
         } else if (!SIM->get_init_done() && (val != BX_FLOPPY_NONE)) {
-          switch (val) {
-            case BX_FLOPPY_2_88:
-              device = BX_FDD_350ED;
-              break;
-            case BX_FLOPPY_720K:
-            case BX_FLOPPY_1_44:
-              device = BX_FDD_350HD;
-              break;
-            default:
-              device = BX_FDD_525HD;
-          }
+          device = get_floppy_devtype_from_type((int)val);
           SIM->get_param_enum("devtype", base)->set(device);
         }
       }
@@ -116,31 +140,20 @@ static Bit64s bx_param_handler(bx_param_c *param, int set, Bit64s val)
   return val;
 }
 
-const char *bx_param_string_handler(bx_param_string_c *param, int set,
+const char *bx_param_string_handler(bx_param_string_c *param, bool set,
                                     const char *oldval, const char *val, int maxlen)
 {
   char pname[BX_PATHNAME_LEN];
 
   param->get_param_path(pname, BX_PATHNAME_LEN);
   if (!strcmp(pname, BXPN_SCREENMODE)) {
-    if (set == 1) {
+    if (set) {
       BX_INFO(("Screen mode changed to %s", val));
     }
   } else if (!strcmp(pname, BXPN_USER_SHORTCUT)) {
-    if ((set == 1) && (SIM->get_init_done())) {
+    if (set && (SIM->get_init_done())) {
       if (!bx_gui->parse_user_shortcut(val)) {
         val = oldval;
-      }
-    }
-  } else if (!strcmp(pname, BXPN_VGA_EXTENSION)) {
-    if (set == 1) {
-      if ((strlen(oldval) > 0) && (strcmp(oldval, "none") && strcmp(oldval, "vbe") &&
-          strcmp(oldval, "cirrus"))) {
-        PLUG_unload_opt_plugin(oldval);
-      }
-      if ((strlen(val) > 0) && (strcmp(val, "none") && strcmp(val, "vbe") &&
-          strcmp(val, "cirrus"))) {
-        PLUG_load_vga_plugin(val);
       }
     }
   } else {
@@ -149,6 +162,7 @@ const char *bx_param_string_handler(bx_param_string_c *param, int set,
   return val;
 }
 
+#if BX_NETWORKING
 void bx_init_std_nic_options(const char *name, bx_list_c *menu)
 {
   bx_param_enum_c *ethmod;
@@ -191,12 +205,25 @@ void bx_init_std_nic_options(const char *name, bx_list_c *menu)
     "", BX_PATHNAME_LEN);
   bootrom->set_format("Name of boot ROM image: %s");
 }
+#endif
 
+#if BX_SUPPORT_PCIUSB
 void bx_init_usb_options(const char *usb_name, const char *pname, int maxports)
 {
   char group[16], name[8], descr[512], label[512];
+  bx_list_c *usb, *usbrt, *deplist, *deplist2;
 
-  bx_param_c *usb = SIM->get_param("ports.usb");
+  bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+  usb = (bx_list_c*)ports->get_by_name("usb");
+  if (usb == NULL) {
+    usb = new bx_list_c(ports, "usb", "USB Configuration");
+    usb->set_options(usb->USE_TAB_WINDOW | usb->SHOW_PARENT);
+    // prepare runtime options
+    bx_list_c *rtmenu = (bx_list_c*)SIM->get_param("menu.runtime");
+    usbrt = new bx_list_c(rtmenu, "usb", "USB options");
+    usbrt->set_runtime_param(1);
+    usbrt->set_options(usbrt->SHOW_PARENT | usbrt->USE_TAB_WINDOW);
+  }
   sprintf(group, "USB %s", usb_name);
   sprintf(label, "%s Configuration", usb_name);
   bx_list_c *menu = new bx_list_c(usb, pname, label);
@@ -204,7 +231,7 @@ void bx_init_usb_options(const char *usb_name, const char *pname, int maxports)
   sprintf(label, "Enable %s emulation", usb_name);
   sprintf(descr, "Enables the %s emulation", usb_name);
   bx_param_bool_c *enabled = new bx_param_bool_c(menu, "enabled", label, descr, 1);
-  bx_list_c *deplist = new bx_list_c(NULL);
+  deplist = new bx_list_c(NULL);
   for (Bit8u i = 0; i < maxports; i++) {
     sprintf(name, "port%u", i+1);
     sprintf(label, "Port #%u Configuration", i+1);
@@ -212,18 +239,29 @@ void bx_init_usb_options(const char *usb_name, const char *pname, int maxports)
     bx_list_c *port = new bx_list_c(menu, name, label);
     port->set_options(port->SERIES_ASK | port->USE_BOX_TITLE);
     sprintf(descr, "Device connected to %s port #%d", usb_name, i+1);
-    bx_param_string_c *device = new bx_param_string_c(port, "device", "Device",
-                                                      descr, "", BX_PATHNAME_LEN);
+    bx_param_enum_c *device = new bx_param_enum_c(port,
+      "device",
+      "Device",
+      descr,
+      bx_usbdev_ctl.get_device_names(),
+      0, 0);
     sprintf(descr, "Options for device connected to %s port #%u", usb_name, i+1);
-    bx_param_string_c *options = new bx_param_string_c(port, "options", "Options",
-                                                       descr, "", BX_PATHNAME_LEN);
+    bx_param_string_c *options = new bx_param_string_c(port,
+      "options",
+      "Options",
+      descr,
+      "", BX_PATHNAME_LEN);
     port->set_group(group);
     deplist->add(port);
     deplist->add(device);
-    deplist->add(options);
+    deplist2 = new bx_list_c(NULL);
+    deplist2->add(options);
+    device->set_dependent_list(deplist2, 1);
+    device->set_dependent_bitmap(0, 0);
   }
   enabled->set_dependent_list(deplist);
 }
+#endif
 
 void bx_plugin_ctrl_init()
 {
@@ -266,6 +304,28 @@ bool bx_opt_plugin_available(const char *plugname)
   return (((bx_list_c*)SIM->get_param(BXPN_PLUGIN_CTRL))->get_by_name(plugname) != NULL);
 }
 
+void bx_init_config_interface_list()
+{
+  Bit8u i, count = 0;
+
+  count = PLUG_get_plugins_count(PLUGTYPE_CI);
+  config_interface_list = (const char**) malloc((count + 1) * sizeof(char*));
+  for (i = 0; i < count; i++) {
+    config_interface_list[i] = PLUG_get_plugin_name(PLUGTYPE_CI, i);
+  }
+  config_interface_list[count] = NULL;
+  // move default config_intergface to the top of the list
+  if (strcmp(config_interface_list[0], BX_DEFAULT_CONFIG_INTERFACE)) {
+    for (i = 1; i < count; i++) {
+      if (!strcmp(config_interface_list[i], BX_DEFAULT_CONFIG_INTERFACE)) {
+        config_interface_list[i] = config_interface_list[0];
+        config_interface_list[0] = BX_DEFAULT_CONFIG_INTERFACE;
+        break;
+      }
+    }
+  }
+}
+
 void bx_init_displaylib_list()
 {
   Bit8u i, count = 0;
@@ -288,6 +348,55 @@ void bx_init_displaylib_list()
   }
 }
 
+void bx_init_vgaext_list()
+{
+  Bit8u i, count = 0;
+  const char *plugname;
+
+  count = PLUG_get_plugins_count(PLUGTYPE_VGA);
+  vga_extension_names = (const char**) malloc((count + 2) * sizeof(char*));
+  vga_extension_plugins = (const char**) malloc((count + 1) * sizeof(char*));
+  vga_extension_names[0] = "none";
+  vga_extension_plugins[0] = "vga";
+  for (i = 0; i < count; i++) {
+    plugname = PLUG_get_plugin_name(PLUGTYPE_VGA, i);
+    vga_extension_plugins[i + 1] = plugname;
+    if (!strcmp(plugname, "vga")) {
+      vga_extension_names[i + 1] = "vbe";
+    } else if (!strcmp(plugname, "svga_cirrus")) {
+      vga_extension_names[i + 1] = plugname + 5;
+    } else {
+      vga_extension_names[i + 1] = plugname;
+    }
+  }
+  vga_extension_names[count + 1] = NULL;
+}
+
+void bx_init_pcidev_list()
+{
+  Bit8u i, j, count, flags;
+  const Bit16u mask = PLUGTYPE_VGA | PLUGTYPE_OPTIONAL;
+  const char *plugname;
+
+  count = PLUG_get_plugins_count(mask);
+  pcislot_dev_list = (const char**) malloc((count + 2) * sizeof(char*));
+  pcislot_dev_list[0] = "none";
+  j = 1;
+  for (i = 0; i < count; i++) {
+    plugname = PLUG_get_plugin_name(mask, i);
+    flags = PLUG_get_plugin_flags(mask, i);
+    if ((flags & PLUGFLAG_PCI) != 0) {
+      if (!strcmp(plugname, "vga")) {
+        plugname = "pcivga";
+      } else if (!strcmp(plugname, "svga_cirrus")) {
+        plugname = "cirrus";
+      }
+      pcislot_dev_list[j++] = plugname;
+    }
+  }
+  pcislot_dev_list[j] = NULL;
+}
+
 void bx_init_options()
 {
   int i;
@@ -305,18 +414,7 @@ void bx_init_options()
   menu = new bx_list_c(root_param, "general", "");
 
  // config interface option, set in bochsrc or command line
-  static const char *config_interface_list[] = {
-#if BX_USE_WIN32CONFIG
-    "win32config",
-#endif
-#if BX_USE_TEXTCONFIG
-    "textconfig",
-#endif
-#if BX_WITH_WX
-    "wx",
-#endif
-    NULL
-  };
+  bx_init_config_interface_list();
   bx_param_enum_c *sel_config = new bx_param_enum_c(menu,
     "config_interface", "Configuration interface",
     "Select configuration interface",
@@ -891,17 +989,19 @@ void bx_init_options()
       BX_PCI_CHIPSET_I430FX);
   deplist->add(pci_chipset);
   // pci slots
+  bx_init_pcidev_list();
   bx_list_c *slot = new bx_list_c(pci, "slot", "PCI Slots");
   deplist->add(slot);
   for (i=0; i<BX_N_PCI_SLOTS; i++) {
     sprintf(name, "%d", i+1);
     sprintf (descr, "Name of the device connected to PCI slot #%d", i+1);
     sprintf (label, "PCI slot #%d device", i+1);
-    bx_param_string_c *devname = new bx_param_string_c(slot,
+    bx_param_enum_c *devname = new bx_param_enum_c(slot,
         name,
         label,
         descr,
-        "", BX_PATHNAME_LEN);
+        pcislot_dev_list,
+        0, 0);
     deplist->add(devname);
   }
   bx_param_string_c *advopts = new bx_param_string_c(pci, "advopts", "Advanced PCI Options",
@@ -909,6 +1009,7 @@ void bx_init_options()
                                                      "", BX_PATHNAME_LEN);
   deplist->add(advopts);
   enabled->set_dependent_list(deplist);
+  enabled->set_enabled(BX_SUPPORT_PCI);
   pci->set_options(pci->SHOW_PARENT);
   slot->set_options(slot->SHOW_PARENT);
 
@@ -963,13 +1064,15 @@ void bx_init_options()
       5);
   vga_update_freq->set_ask_format ("Type a new value for VGA update frequency: [%d] ");
 
-  bx_param_string_c *vga_extension = new bx_param_string_c(display,
-                "vga_extension",
-                "VGA Extension",
-                "Name of the VGA extension",
-                "none", BX_PATHNAME_LEN);
-  vga_extension->set_handler(bx_param_string_handler);
-  vga_extension->set_initial_val("vbe");
+  bx_init_vgaext_list();
+  bx_param_enum_c *vga_extension = new bx_param_enum_c(display,
+      "vga_extension",
+      "VGA Extension",
+      "Name of the VGA extension",
+      vga_extension_names,
+      0, 0);
+  vga_extension->set_by_name("vbe");
+  vga_extension->set_handler(bx_param_handler);
   display->set_options(display->SHOW_PARENT);
 
   static const char *ddc_mode_list[] = {
@@ -1131,9 +1234,10 @@ void bx_init_options()
       "Type of floppy drive",
       "Type of floppy drive",
       floppy_devtype_names,
-      BX_FDD_NONE,
+      (i==0)?BX_FDD_350HD:BX_FDD_NONE,
       BX_FDD_NONE);
     devtype->set_ask_format("What type of floppy drive? [%s] ");
+    devtype->set_handler(bx_param_handler);
 
     if (i == 0) {
       strcpy(label, "First floppy image/device");
@@ -1466,40 +1570,29 @@ void bx_init_options()
 #endif
 
   // ports subtree
-  bx_list_c *ports = new bx_list_c(root_param, "ports", "Serial and Parallel Port Options");
+  bx_list_c *ports = new bx_list_c(root_param, "ports", "Serial / Parallel / USB Options");
   ports->set_options(ports->USE_TAB_WINDOW | ports->SHOW_PARENT);
-
-  // parallel ports
-  bx_list_c *parallel = new bx_list_c(ports, "parallel", "Parallel Port Options");
-  parallel->set_options(parallel->SHOW_PARENT);
-  // parport options initialized in the devive plugin code
-
-  // serial ports
-  bx_list_c *serial = new bx_list_c(ports, "serial", "Serial Port Options");
-  serial->set_options(serial->SHOW_PARENT);
-  // serial port options initialized in the devive plugin code
-
-  // usb subtree
-  bx_list_c *usb = new bx_list_c(ports, "usb", "USB Configuration");
-  usb->set_options(usb->USE_TAB_WINDOW | usb->SHOW_PARENT);
-  // USB host controller options initialized in the devive plugin code
+#if BX_SUPPORT_PCIUSB
+  bx_usbdev_ctl.init();
+#endif
+  // parallel / serial / USB options initialized in the device plugin code
 
 #if BX_NETWORKING
   // network subtree
   bx_list_c *network = new bx_list_c(root_param, "network", "Network Configuration");
   network->set_options(network->USE_TAB_WINDOW | network->SHOW_PARENT);
   bx_netmod_ctl.init();
-  // network device options initialized in the devive plugin code
+  // network device options initialized in the device plugin code
 #endif
 
   // sound subtree
   bx_list_c *sound = new bx_list_c(root_param, "sound", "Sound Configuration");
   sound->set_options(sound->USE_TAB_WINDOW | sound->SHOW_PARENT);
+#if BX_SUPPORT_SOUNDLOW
   bx_list_c *soundlow = new bx_list_c(sound, "lowlevel", "Lowlevel Sound Configuration");
   soundlow->set_options(soundlow->SHOW_PARENT | soundlow->SERIES_ASK);
   soundlow->set_enabled(BX_SUPPORT_SOUNDLOW);
 
-#if BX_SUPPORT_SOUNDLOW
   bx_soundmod_ctl.init();
   bx_param_enum_c *driver = new bx_param_enum_c(soundlow,
     "waveoutdrv",
@@ -1538,7 +1631,7 @@ void bx_init_options()
     "This is the device where the MIDI output is sent to",
     "", BX_PATHNAME_LEN);
 #endif
-  // sound device options initialized in the devive plugin code
+  // sound device options initialized in the device plugin code
 
   // misc options subtree
   bx_list_c *misc = new bx_list_c(root_param, "misc", "Configure Everything Else");
@@ -1627,9 +1720,6 @@ void bx_init_options()
   bx_list_c *cdrom = new bx_list_c(menu, "cdrom", "CD-ROM options");
   cdrom->set_runtime_param(1);
   cdrom->set_options(cdrom->SHOW_PARENT);
-  usb = new bx_list_c(menu, "usb", "USB options");
-  usb->set_runtime_param(1);
-  usb->set_options(usb->SHOW_PARENT | usb->USE_TAB_WINDOW);
   // misc runtime options
   misc = new bx_list_c(menu, "misc", "Misc options");
   misc->set_runtime_param(1);
@@ -1637,6 +1727,7 @@ void bx_init_options()
   misc->add(SIM->get_param(BXPN_MOUSE_ENABLED));
   misc->add(SIM->get_param(BXPN_KBD_PASTE_DELAY));
   misc->add(SIM->get_param(BXPN_USER_SHORTCUT));
+  misc->add(SIM->get_param(BXPN_PORT_E9_HACK));
   misc->set_options(misc->SHOW_PARENT | misc->SHOW_GROUP_NAME);
 }
 
@@ -1980,41 +2071,32 @@ int get_floppy_type_from_image(const char *filename)
 
   if (!strncmp(filename, "vvfat:", 6)) {
     return BX_FLOPPY_1_44;
-  }
-  if (stat(filename, &stat_buf)) {
+  } else if (stat(filename, &stat_buf)) {
     return BX_FLOPPY_NONE;
-  }
-
-  switch (stat_buf.st_size) {
-    case 163840:
-      return BX_FLOPPY_160K;
-
-    case 184320:
-      return BX_FLOPPY_180K;
-
-    case 327680:
-      return BX_FLOPPY_320K;
-
-    case 368640:
-      return BX_FLOPPY_360K;
-
-    case 737280:
-      return BX_FLOPPY_720K;
-
-    case 1228800:
-      return BX_FLOPPY_1_2;
-
-    case 1474560:
-    case 1720320:
-    case 1763328:
-    case 1884160:
-      return BX_FLOPPY_1_44;
-
-    case 2949120:
-      return BX_FLOPPY_2_88;
-
-    default:
-      return BX_FLOPPY_UNKNOWN;
+  } else {
+    switch (stat_buf.st_size) {
+      case 163840:
+        return BX_FLOPPY_160K;
+      case 184320:
+        return BX_FLOPPY_180K;
+      case 327680:
+        return BX_FLOPPY_320K;
+      case 368640:
+        return BX_FLOPPY_360K;
+      case 737280:
+        return BX_FLOPPY_720K;
+      case 1228800:
+        return BX_FLOPPY_1_2;
+      case 1474560:
+      case 1720320:
+      case 1763328:
+      case 1884160:
+        return BX_FLOPPY_1_44;
+      case 2949120:
+        return BX_FLOPPY_2_88;
+      default:
+        return BX_FLOPPY_UNKNOWN;
+    }
   }
 }
 
@@ -2164,14 +2246,21 @@ int bx_parse_param_from_list(const char *context, const char *input, bx_list_c *
   return ret;
 }
 
-int bx_parse_usb_port_params(const char *context, bool devopt, const char *param, int maxports, bx_list_c *base)
+int bx_parse_usb_port_params(const char *context, const char *param,
+                             int maxports, bx_list_c *base)
 {
+  bool devopt = 0;
   int idx, plen;
-  char tmpname[20];
+  char tmpname[20], newopts[BX_PATHNAME_LEN];
+  char *devstr, *arg;
+  const char *opt = NULL, *origopts;
+  static bool compat_mode = false;
 
-  if (!devopt) {
+  if (!strncmp(param, "port", 4)) {
+    devopt = 1;
     plen = 4;
   } else {
+    devopt = 0;
     plen = 7;
   }
   idx = param[plen];
@@ -2184,8 +2273,48 @@ int bx_parse_usb_port_params(const char *context, bool devopt, const char *param
     PARSE_ERR(("%s: usb_%s: port number out of range.", context, base->get_name()));
     return -1;
   }
-  sprintf(tmpname, "port%d.%s", idx, devopt ? "options" : "device");
-  SIM->get_param_string(tmpname, base)->set(&param[plen + 2]);
+  sprintf(tmpname, "port%d.%s", idx, devopt ? "device" : "options");
+  if (devopt) {
+    compat_mode = false;
+    if (!SIM->get_param_enum(tmpname, base)->set_by_name(&param[plen + 2])) {
+      // backward compatibility code
+      devstr = strdup(&param[plen + 2]);
+      arg = strtok(devstr, ":");
+      arg = strtok(NULL, "\n");
+      SIM->get_param_enum(tmpname, base)->set_by_name(devstr);
+      if (arg != NULL) {
+        if (!strcmp(devstr, "disk") || !strcmp(devstr, "cdrom") ||
+            !strcmp(devstr, "floppy")) {
+          opt = "path";
+        } else if (!strcmp(devstr, "hub")) {
+          opt = "ports";
+        } else if (!strcmp(devstr, "printer")) {
+          opt = "file";
+        }
+        if (opt != NULL) {
+          sprintf(tmpname, "port%d.options", idx);
+          origopts = SIM->get_param_string(tmpname, base)->getptr();
+          if (strlen(origopts) > 0) {
+            sprintf(newopts, "%s:%s, %s", opt, arg, origopts);
+          } else {
+            sprintf(newopts, "%s:%s", opt, arg);
+          }
+          SIM->get_param_string(tmpname, base)->set(newopts);
+          compat_mode = true;
+        }
+      }
+      free(devstr);
+    }
+  } else {
+    if (compat_mode) {
+      origopts = SIM->get_param_string(tmpname, base)->getptr();
+      sprintf(newopts, "%s, %s", origopts, &param[plen + 2]);
+      compat_mode = false;
+    } else {
+      strcpy(newopts, &param[plen + 2]);
+    }
+    SIM->get_param_string(tmpname, base)->set(newopts);
+  }
   return 0;
 }
 
@@ -2232,7 +2361,7 @@ int bx_split_option_list(const char *msg, const char *rawopt, char **argv, int m
       strcpy(tmpstr, ptr);
       ptr2 = tmpstr;
       while (isspace(*ptr2)) ptr2++;
-      i = strlen(ptr2) - 1;
+      i = (int)strlen(ptr2) - 1;
       while ((i >= 0) && isspace(ptr2[i])) {
         ptr2[i] = 0;
         i--;
@@ -2282,9 +2411,10 @@ bool is_deprecated_option(const char *oldparam, const char **newparam)
 
 static int parse_line_formatted(const char *context, int num_params, char *params[])
 {
-  int i, slot, t;
+  int i, slot, t, dt;
   bx_list_c *base;
   const char *newparam;
+  char *value;
 
   if (num_params < 1) return 0;
   if (num_params < 2) {
@@ -2354,68 +2484,32 @@ static int parse_line_formatted(const char *context, int num_params, char *param
     }
     for (i=1; i<num_params; i++) {
       if (!strncmp(params[i], "type=", 5)) {
-        if (!strcmp(params[i]+5, "2_88")) {
-          SIM->get_param_enum("devtype", base)->set(BX_FDD_350ED);
+        value = params[i] + 5;
+        dt = -1;
+        if (!strcmp(value, "2_88")) {
+          dt = BX_FDD_350ED;
         }
-        else if (!strcmp(params[i]+5, "1_44")) {
-          SIM->get_param_enum("devtype", base)->set(BX_FDD_350HD);
+        else if (!strcmp(value, "1_44")) {
+          dt = BX_FDD_350HD;
         }
-        else if (!strcmp(params[i]+5, "1_2")) {
-          SIM->get_param_enum("devtype", base)->set(BX_FDD_525HD);
+        else if (!strcmp(value, "1_2")) {
+          dt = BX_FDD_525HD;
         }
-        else if (!strcmp(params[i]+5, "720k")) {
-          SIM->get_param_enum("devtype", base)->set(BX_FDD_350DD);
+        else if (!strcmp(value, "720k")) {
+          dt = BX_FDD_350DD;
         }
-        else if (!strcmp(params[i]+5, "360k")) {
-          SIM->get_param_enum("devtype", base)->set(BX_FDD_525DD);
+        else if (!strcmp(value, "360k")) {
+          dt = BX_FDD_525DD;
+        }
+        else if (!strcmp(value, "none")) {
+          dt = BX_FDD_NONE;
         }
         else {
-          PARSE_ERR(("%s: %s: unknown type '%s'.", context, params[0],
-            params[i]+5));
+          PARSE_ERR(("%s: %s: unknown type '%s'.", context, params[0], value));
         }
-      }
-      else if (!strncmp(params[i], "2_88=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_2_88);
-      }
-      else if (!strncmp(params[i], "1_44=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_1_44);
-      }
-      else if (!strncmp(params[i], "1_2=", 4)) {
-        SIM->get_param_string("path", base)->set(&params[i][4]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_1_2);
-      }
-      else if (!strncmp(params[i], "720k=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_720K);
-      }
-      else if (!strncmp(params[i], "360k=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_360K);
-      }
-      // use CMOS reserved types?
-      else if (!strncmp(params[i], "160k=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_160K);
-      }
-      else if (!strncmp(params[i], "180k=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_180K);
-      }
-      else if (!strncmp(params[i], "320k=", 5)) {
-        SIM->get_param_string("path", base)->set(&params[i][5]);
-        SIM->get_param_enum("type", base)->set(BX_FLOPPY_320K);
-      }
-      else if (!strncmp(params[i], "image=", 6)) {
-        /* "image=" means we should get floppy type from image */
-        SIM->get_param_string("path", base)->set(&params[i][6]);
-        t = get_floppy_type_from_image(&params[i][6]);
-        if (t != BX_FLOPPY_UNKNOWN)
-          SIM->get_param_enum("type", base)->set(t);
-        else
-          PARSE_ERR(("%s: %s image size doesn't match one of the supported types.",
-            context, params[0]));
+        if (dt >= 0) {
+          SIM->get_param_enum("devtype", base)->set(dt);
+        }
       }
       else if (!strcmp(params[i], "status=inserted")) {
         SIM->get_param_enum("status", base)->set(BX_INSERTED);
@@ -2426,9 +2520,64 @@ static int parse_line_formatted(const char *context, int num_params, char *param
       else if (!strncmp(params[i], "write_protected=", 16)) {
         SIM->get_param_bool("readonly", base)->set(atol(&params[i][16]));
       }
+      else if (!strncmp(params[i], "image=", 6)) {
+        /* "image=" means we should get floppy type from image */
+        value = params[i] + 6;
+        t = get_floppy_type_from_image(value);
+        dt = get_floppy_devtype_from_type(t);
+        if (t != BX_FLOPPY_UNKNOWN) {
+          SIM->get_param_enum("devtype", base)->set(dt);
+          SIM->get_param_string("path", base)->set(value);
+          SIM->get_param_enum("type", base)->set(t);
+        } else
+          PARSE_ERR(("%s: %s image size doesn't match one of the supported types.",
+            context, params[0]));
+      }
       else {
-        PARSE_ERR(("%s: %s attribute '%s' not understood.", context, params[0],
-          params[i]));
+        if (!strncmp(params[i], "2_88=", 5)) {
+          t = BX_FLOPPY_2_88;
+          value = params[i] + 5;
+        }
+        else if (!strncmp(params[i], "1_44=", 5)) {
+          t = BX_FLOPPY_1_44;
+          value = params[i] + 5;
+        }
+        else if (!strncmp(params[i], "1_2=", 4)) {
+          t = BX_FLOPPY_1_2;
+          value = params[i] + 4;
+        }
+        else if (!strncmp(params[i], "720k=", 5)) {
+          t = BX_FLOPPY_720K;
+          value = params[i] + 5;
+        }
+        else if (!strncmp(params[i], "360k=", 5)) {
+          t = BX_FLOPPY_360K;
+          value = params[i] + 5;
+        }
+        // use CMOS reserved types?
+        else if (!strncmp(params[i], "160k=", 5)) {
+          t = BX_FLOPPY_160K;
+          value = params[i] + 5;
+        }
+        else if (!strncmp(params[i], "180k=", 5)) {
+          t = BX_FLOPPY_180K;
+          value = params[i] + 5;
+        }
+        else if (!strncmp(params[i], "320k=", 5)) {
+          t = BX_FLOPPY_320K;
+          value = params[i] + 5;
+        }
+        else {
+          t = -1;
+          PARSE_ERR(("%s: %s attribute '%s' not understood.", context, params[0],
+            params[i]));
+        }
+        if (t > 0) {
+          dt = get_floppy_devtype_from_type(t);
+          SIM->get_param_enum("devtype", base)->set(dt);
+          SIM->get_param_string("path", base)->set(value);
+          SIM->get_param_enum("type", base)->set(t);
+        }
       }
     }
   } else if ((!strncmp(params[0], "ata", 3)) && (strlen(params[0]) == 4)) {
@@ -2729,7 +2878,7 @@ static int parse_line_formatted(const char *context, int num_params, char *param
     }
     for (i=1; i<num_params; i++) {
       if (!strncmp(params[i], "extension=", 10)) {
-        SIM->get_param_string(BXPN_VGA_EXTENSION)->set(&params[i][10]);
+        SIM->get_param_enum(BXPN_VGA_EXTENSION)->set_by_name(&params[i][10]);
       } else if (!strncmp(params[i], "update_freq=", 12)) {
         SIM->get_param_num(BXPN_VGA_UPDATE_FREQUENCY)->set(atol(&params[i][12]));
       } else if (!strncmp(params[i], "realtime=", 9)) {
@@ -2817,7 +2966,11 @@ static int parse_line_formatted(const char *context, int num_params, char *param
         slot = atol(&params[i][4]);
         if ((slot > 0) && (slot < 6)) {
           sprintf(tmpdev, "pci.slot.%d", slot);
-          SIM->get_param_string(tmpdev)->set(&params[i][6]);
+          if (strlen(&params[i][6]) > 0) {
+            SIM->get_param_enum(tmpdev)->set_by_name(&params[i][6]);
+          } else {
+            SIM->get_param_enum(tmpdev)->set_by_name("none");
+          }
         } else {
           BX_ERROR(("%s: unknown pci slot number ignored.", context));
         }
@@ -2876,7 +3029,7 @@ static int parse_line_formatted(const char *context, int num_params, char *param
                      &tm_time.tm_hour, &tm_time.tm_min, &tm_time.tm_sec, &year);
           if ((n == 7) && (year >= 1980) && (strstr(months, mon) != NULL)) {
             tm_time.tm_year = year - 1900;
-            tm_time.tm_mon = 12 - (strlen(strstr(months, mon)) / 4);
+            tm_time.tm_mon = 12 - ((int)strlen(strstr(months, mon)) / 4);
             SIM->get_param_num(BXPN_CLOCK_TIME0)->set(mktime(&tm_time));
           } else {
             PARSE_ERR(("%s: time0 string format malformed.", context));
@@ -3123,6 +3276,7 @@ int bx_write_floppy_options(FILE *fp, int drive)
   return 0;
 }
 
+#if BX_SUPPORT_PCIUSB
 int bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base)
 {
   int i;
@@ -3132,7 +3286,7 @@ int bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base)
   if (SIM->get_param_bool("enabled", base)->get()) {
     for (i = 1; i <= maxports; i++) {
       sprintf(tmpname, "port%d.device", i);
-      SIM->get_param_string(tmpname, base)->dump_param(tmpstr, BX_PATHNAME_LEN, 1);
+      SIM->get_param_enum(tmpname, base)->dump_param(tmpstr, BX_PATHNAME_LEN, 1);
       fprintf(fp, ", port%d=%s", i, tmpstr);
       sprintf(tmpname, "port%d.options", i);
       SIM->get_param_string(tmpname, base)->dump_param(tmpstr, BX_PATHNAME_LEN, 1);
@@ -3142,6 +3296,7 @@ int bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base)
   fprintf(fp, "\n");
   return 0;
 }
+#endif
 
 int bx_write_clock_cmos_options(FILE *fp)
 {
@@ -3301,19 +3456,16 @@ int bx_write_configuration(const char *rc, int overwrite)
     fprintf(fp, ", chipset=%s", SIM->get_param_enum(BXPN_PCI_CHIPSET)->get_selected());
     for (i=0; i<BX_N_PCI_SLOTS; i++) {
       sprintf(tmpdev, "pci.slot.%d", i+1);
-      sparam = SIM->get_param_string(tmpdev);
-      if (!sparam->isempty()) {
-        fprintf(fp, ", slot%d=%s", i+1, sparam->getptr());
-      }
+      fprintf(fp, ", slot%d=%s", i+1, SIM->get_param_enum(tmpdev)->get_selected());
     }
     sparam = SIM->get_param_string(BXPN_PCI_ADV_OPTS);
     if (strlen(sparam->getptr()) > 0) {
-      fprintf(fp, ", advopts=%s", sparam->getptr());
+      fprintf(fp, ", advopts=\"%s\"", sparam->getptr());
     }
   }
   fprintf(fp, "\n");
   fprintf(fp, "vga: extension=%s, update_freq=%u, realtime=%u, ddc=%s",
-    SIM->get_param_string(BXPN_VGA_EXTENSION)->getptr(),
+    SIM->get_param_enum(BXPN_VGA_EXTENSION)->get_selected(),
     SIM->get_param_num(BXPN_VGA_UPDATE_FREQUENCY)->get(),
     SIM->get_param_bool(BXPN_VGA_REALTIME)->get(),
     SIM->get_param_enum(BXPN_DDC_MODE)->get_selected());

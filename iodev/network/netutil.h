@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netutil.h 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: netutil.h 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2004-2021  The Bochs Project
@@ -171,7 +171,7 @@ typedef struct {
 
 // vnet functions shared with bxhub
 #ifdef BXHUB
-#define bx_devmodel_c void
+#define logfunctions void
 #endif
 Bit16u ip_checksum(const Bit8u *buf, unsigned buf_len);
 
@@ -239,7 +239,7 @@ public:
   vnet_server_c();
   virtual ~vnet_server_c();
 
-  void init(bx_devmodel_c *netdev, dhcp_cfg_t *dhcpc, const char *tftp_rootdir);
+  void init(logfunctions *netdev, dhcp_cfg_t *dhcpc, const char *tftp_rootdir);
   void init_client(Bit8u clientid, const Bit8u *macaddr, char *hostname);
   void handle_packet(const Bit8u *buf, unsigned len);
   unsigned get_packet(Bit8u *buf);
@@ -330,7 +330,7 @@ private:
 #ifdef BXHUB
   FILE *logfd;
 #endif
-  bx_devmodel_c *netdev;
+  logfunctions *netdev;
   dhcp_cfg_t *dhcp;
   const char *tftp_root;
 

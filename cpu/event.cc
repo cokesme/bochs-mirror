@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: event.cc 14086 2021-01-30 08:35:35Z sshwarts $
+// $Id: event.cc 14233 2021-04-27 08:22:04Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2013 Stanislav Shwartsman
@@ -221,6 +221,11 @@ bool BX_CPU_C::handleAsyncEvent(void)
   //   INIT
   if (is_unmasked_event_pending(BX_EVENT_SMI) && SVM_GIF)
   {
+#if BX_SUPPORT_SVM
+    if (BX_CPU_THIS_PTR in_svm_guest) {
+      if (SVM_INTERCEPT(SVM_INTERCEPT0_SMI)) Svm_Vmexit(SVM_VMEXIT_SMI);
+    }
+#endif
     clear_event(BX_EVENT_SMI); // clear SMI pending flag
     enter_system_management_mode(); // would disable NMI when SMM was accepted
   }

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: speaker.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: speaker.cc 14184 2021-03-14 09:52:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003       David N. Welton <davidw@dedasys.com>.
@@ -91,7 +91,7 @@ void speaker_init_options(void)
   bx_param_enum_c *mode = new bx_param_enum_c(menu, "mode", "Speaker output mode",
       "The mode can be one these: 'none', 'sound', 'system' or 'gui'",
       speaker_mode_list, 1, BX_SPK_MODE_NONE);
-  mode->set_ask_format("Select speker output mode [%s] ");
+  mode->set_ask_format("Select speaker output mode [%s] ");
 #if BX_SUPPORT_SOUNDLOW
   bx_param_num_c *volume = new bx_param_num_c(menu, "volume", "Speaker volume",
       "Set the PC speaker volume", 0, 15, 15);
@@ -146,7 +146,7 @@ PLUGIN_ENTRY_FOR_MODULE(speaker)
     SIM->unregister_addon_option("speaker");
     ((bx_list_c*)SIM->get_param("sound"))->remove("speaker");
     bx_devices.remove_sound_device();
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
   }
   return(0); // Success

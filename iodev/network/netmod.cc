@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netmod.cc 14139 2021-02-10 07:29:14Z vruppert $
+// $Id: netmod.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -24,7 +24,9 @@
 // Peter Grehan (grehan@iprg.nokia.com) coded the initial version of the
 // NE2000/ether stuff.
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "gui/siminterface.h"
 
 #if BX_NETWORKING
 
@@ -78,7 +80,7 @@ void bx_netmod_ctl_c::list_modules(void)
   list[0] = 0;
   while (net_module_names[i] != NULL) {
     len1 = strlen(net_module_names[i]);
-    if ((len + len1 + 1) > 60) {
+    if ((len + len1 + 1) > 58) {
       BX_INFO((" %s", list));
       list[0] = 0;
       len = 0;
@@ -99,7 +101,7 @@ void bx_netmod_ctl_c::exit(void)
   eth_locator_c::cleanup();
 }
 
-void* bx_netmod_ctl_c::init_module(bx_list_c *base, void *rxh, void *rxstat, bx_devmodel_c *netdev)
+void* bx_netmod_ctl_c::init_module(bx_list_c *base, void *rxh, void *rxstat, logfunctions *netdev)
 {
   eth_pktmover_c *ethmod;
 
@@ -202,13 +204,13 @@ eth_pktmover_c *
 eth_locator_c::create(const char *type, const char *netif,
                       const char *macaddr,
                       eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                      bx_devmodel_c *dev, const char *script)
+                      logfunctions *netdev, const char *script)
 {
   eth_locator_c *ptr = 0;
 
   for (ptr = all; ptr != NULL; ptr = ptr->next) {
     if (strcmp(type, ptr->type) == 0)
-      return (ptr->allocate(netif, macaddr, rxh, rxstat, dev, script));
+      return (ptr->allocate(netif, macaddr, rxh, rxstat, netdev, script));
   }
   return NULL;
 }
@@ -220,7 +222,7 @@ extern "C" {
 };
 
 // This is a utility script used for tuntap or ethertap
-int execute_script(bx_devmodel_c *netdev, const char* scriptname, char* arg1)
+int execute_script(logfunctions *netdev, const char* scriptname, char* arg1)
 {
   int pid,status;
 

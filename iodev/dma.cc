@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dma.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: dma.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -40,16 +40,12 @@ bx_dma_c *theDmaDevice = NULL;
 PLUGIN_ENTRY_FOR_MODULE(dma)
 {
   if (mode == PLUGIN_INIT) {
-    if (type == PLUGTYPE_CORE) {
-      theDmaDevice = new bx_dma_c ();
-      bx_devices.pluginDmaDevice = theDmaDevice;
-      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theDmaDevice, BX_PLUGIN_DMA);
-    } else {
-      return -1;
-    }
+    theDmaDevice = new bx_dma_c ();
+    bx_devices.pluginDmaDevice = theDmaDevice;
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theDmaDevice, BX_PLUGIN_DMA);
   } else if (mode == PLUGIN_FINI) {
     delete theDmaDevice;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_CORE;
   }
   return 0; // Success
@@ -123,7 +119,7 @@ unsigned bx_dma_c::get_TC(void)
 void bx_dma_c::init(void)
 {
   unsigned c, i, j;
-  BX_DEBUG(("Init $Id: dma.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: dma.cc 14163 2021-02-26 20:37:49Z vruppert $"));
 
   /* 8237 DMA controller */
 

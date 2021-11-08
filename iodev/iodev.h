@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: iodev.h 14129 2021-02-06 16:51:55Z vruppert $
+// $Id: iodev.h 14293 2021-06-27 14:50:26Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -126,6 +126,7 @@ class cdrom_base_c;
 
 #define BX_PCI_ADVOPT_NOACPI 0x01
 #define BX_PCI_ADVOPT_NOHPET 0x02
+#define BX_PCI_ADVOPT_NOAGP  0x04
 
 typedef struct {
   Bit8u  type;
@@ -443,6 +444,7 @@ public:
                        Bit32u *addr, Bit8u *pci_conf, unsigned size,
                        const Bit8u *iomask, const char *name);
 #endif
+  bool is_agp_present();
 
   static void timer_handler(void *);
   void timer(void);
@@ -533,7 +535,7 @@ private:
   static void   default_write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);
 
   // runtime options / paste feature
-  static Bit64s param_handler(bx_param_c *param, int set, Bit64s val);
+  static Bit64s param_handler(bx_param_c *param, bool set, Bit64s val);
   void paste_delay_changed(Bit32u value);
   void service_paste_buf();
 
@@ -605,10 +607,8 @@ private:
   int statusbar_id[3];
 
   Bit8u sound_device_count;
-  bool  usb_enabled;
 
   bool is_harddrv_enabled();
-  bool is_usb_enabled();
 };
 
 // memory stub has an assumption that there are no memory accesses splitting 4K page

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hid.h 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: usb_hid.h 14150 2021-02-17 16:22:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB HID emulation support (mouse and tablet) ported from QEMU
@@ -35,9 +35,11 @@
 
 class usb_hid_device_c : public usb_device_c {
 public:
-  usb_hid_device_c(usbdev_type type);
+  usb_hid_device_c(const char *devname);
   virtual ~usb_hid_device_c(void);
 
+  virtual bool init();
+  virtual const char* get_info();
   virtual void handle_reset();
   virtual int handle_control(int request, int value, int index, int length, Bit8u *data);
   virtual int handle_data(USBPacket *p);

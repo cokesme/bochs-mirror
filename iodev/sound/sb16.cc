@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sb16.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: sb16.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -178,7 +178,7 @@ PLUGIN_ENTRY_FOR_MODULE(sb16)
     SIM->unregister_addon_option("sb16");
     ((bx_list_c*)SIM->get_param("sound"))->remove("sb16");
     bx_devices.remove_sound_device();
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
   }
   return(0); // Success
@@ -3158,7 +3158,7 @@ int bx_sb16_buffer::commandbytes(void)
 }
 
 // runtime parameter handlers
-Bit64s bx_sb16_c::sb16_param_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_sb16_c::sb16_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   if (set) {
     const char *pname = param->get_name();
@@ -3181,7 +3181,7 @@ Bit64s bx_sb16_c::sb16_param_handler(bx_param_c *param, int set, Bit64s val)
   return val;
 }
 
-const char* bx_sb16_c::sb16_param_string_handler(bx_param_string_c *param, int set,
+const char* bx_sb16_c::sb16_param_string_handler(bx_param_string_c *param, bool set,
                                                  const char *oldval, const char *val,
                                                  int maxlen)
 {

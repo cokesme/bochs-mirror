@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmware4.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: vmware4.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -44,7 +44,8 @@
 #include "osdep.h"
 #include "misc/bswap.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 #endif
 #include "hdimage.h"
 #include "vmware4.h"

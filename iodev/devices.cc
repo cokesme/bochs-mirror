@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: devices.cc 14129 2021-02-06 16:51:55Z vruppert $
+// $Id: devices.cc 14293 2021-06-27 14:50:26Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -74,6 +74,9 @@ bx_devices_c::~bx_devices_c()
 #if BX_SUPPORT_SOUNDLOW
   bx_soundmod_ctl.exit();
 #endif
+#if BX_SUPPORT_PCIUSB
+  bx_usbdev_ctl.exit();
+#endif
 }
 
 void bx_devices_c::init_stubs()
@@ -109,10 +112,10 @@ void bx_devices_c::init(BX_MEM_C *newmem)
 #endif
   unsigned i, argc;
   const char def_name[] = "Default";
-  const char *vga_ext, *options;
+  const char *options;
   char *argv[16];
 
-  BX_DEBUG(("Init $Id: devices.cc 14129 2021-02-06 16:51:55Z vruppert $"));
+  BX_DEBUG(("Init $Id: devices.cc 14293 2021-06-27 14:50:26Z vruppert $"));
   mem = newmem;
 
   /* set builtin default handlers, will be overwritten by the real default handler */
@@ -189,7 +192,9 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   if (pci.enabled) {
 #if BX_SUPPORT_PCI
     if (chipset == BX_PCI_CHIPSET_I430FX) {
-      pci.advopts = (BX_PCI_ADVOPT_NOHPET | BX_PCI_ADVOPT_NOACPI);
+      pci.advopts = (BX_PCI_ADVOPT_NOHPET | BX_PCI_ADVOPT_NOACPI | BX_PCI_ADVOPT_NOAGP);
+    } else if (chipset == BX_PCI_CHIPSET_I440FX) {
+      pci.advopts = BX_PCI_ADVOPT_NOAGP;
     } else {
       pci.advopts = 0;
     }
@@ -198,12 +203,18 @@ void bx_devices_c::init(BX_MEM_C *newmem)
     for (i = 0; i < argc; i++) {
       if (!strcmp(argv[i], "noacpi")) {
         if (chipset == BX_PCI_CHIPSET_I440FX) {
-          pci.advopts = BX_PCI_ADVOPT_NOACPI;
+          pci.advopts |= BX_PCI_ADVOPT_NOACPI;
         } else {
           BX_ERROR(("Disabling ACPI not supported by PCI chipset"));
         }
       } else if (!strcmp(argv[i], "nohpet")) {
-        pci.advopts = BX_PCI_ADVOPT_NOHPET;
+        pci.advopts |= BX_PCI_ADVOPT_NOHPET;
+      } else if (!strcmp(argv[i], "noagp")) {
+        if (chipset == BX_PCI_CHIPSET_I440BX) {
+          pci.advopts |= BX_PCI_ADVOPT_NOAGP;
+        } else {
+          BX_ERROR(("Disabling AGP not supported by PCI chipset"));
+        }
       } else {
         BX_ERROR(("Unknown advanced PCI option '%s'", argv[i]));
       }
@@ -213,9 +224,6 @@ void bx_devices_c::init(BX_MEM_C *newmem)
     PLUG_load_plugin(pci, PLUGTYPE_CORE);
     PLUG_load_plugin(pci2isa, PLUGTYPE_CORE);
 #if BX_SUPPORT_PCIUSB
-    usb_enabled = is_usb_enabled();
-    if (usb_enabled)
-      bx_usbdev_ctl.init();
     if ((chipset == BX_PCI_CHIPSET_I440FX) ||
         (chipset == BX_PCI_CHIPSET_I440BX)) {
       // UHCI is a part of the PIIX3/PIIX4, so load / enable it
@@ -239,17 +247,8 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   PLUG_load_plugin(dma, PLUGTYPE_CORE);
   PLUG_load_plugin(pic, PLUGTYPE_CORE);
   PLUG_load_plugin(pit, PLUGTYPE_CORE);
-  vga_ext = SIM->get_param_string(BXPN_VGA_EXTENSION)->getptr();
-  if (!strcmp(vga_ext, "cirrus")) {
-#if BX_SUPPORT_CLGD54XX
-    PLUG_load_plugin(svga_cirrus, PLUGTYPE_CORE);
-#else
-    BX_PANIC(("Bochs is not compiled with Cirrus support"));
-#endif
-  } else if (!strcmp(vga_ext, "vbe") || !strcmp(vga_ext, "none")) {
-    PLUG_load_plugin(vga, PLUGTYPE_CORE);
-  } else if (pluginVgaDevice == &stubVga) {
-    BX_PANIC(("No VGA compatible display adapter present"));
+  if (pluginVgaDevice == &stubVga) {
+    PLUG_load_plugin_var(BX_PLUGIN_VGA, PLUGTYPE_VGA);
   }
   PLUG_load_plugin(floppy, PLUGTYPE_CORE);
 
@@ -368,20 +367,20 @@ void bx_devices_c::init(BX_MEM_C *newmem)
 #if BX_SUPPORT_PCI
   // verify PCI slot configuration
   char devname[80];
-  char *device;
+  const char *device;
 
   if (pci.enabled) {
-    if (chipset == BX_PCI_CHIPSET_I440BX) {
-      device = SIM->get_param_string("pci.slot.5")->getptr();
-      if ((strlen(device) > 0) && !pci.slot_used[4]) {
+    if ((chipset == BX_PCI_CHIPSET_I440BX) && is_agp_present()) {
+      device = SIM->get_param_enum("pci.slot.5")->get_selected();
+      if (strcmp(device, "none") && !pci.slot_used[4]) {
         BX_PANIC(("Unknown plugin '%s' at AGP slot", device));
       }
       max_pci_slots = 4;
     }
     for (i = 0; i < max_pci_slots; i++) {
       sprintf(devname, "pci.slot.%d", i+1);
-      device = SIM->get_param_string(devname)->getptr();
-      if ((strlen(device) > 0) && !pci.slot_used[i]) {
+      device = SIM->get_param_enum(devname)->get_selected();
+      if (strcmp(device, "none") && !pci.slot_used[i]) {
         BX_PANIC(("Unknown plugin '%s' at PCI slot #%d", device, i+1));
       }
     }
@@ -449,13 +448,8 @@ void bx_devices_c::exit()
   bx_virt_timer.setup();
   bx_slowdown_timer.exit();
 
-  // unload optional plugins first
+  // unload device plugins
   bx_unload_plugins();
-  bx_unload_core_plugins();
-#if BX_SUPPORT_PCIUSB
-  if (usb_enabled)
-    bx_usbdev_ctl.exit();
-#endif
   // remove runtime parameter handlers
   SIM->get_param_num(BXPN_KBD_PASTE_DELAY)->set_handler(NULL);
   SIM->get_param_num(BXPN_MOUSE_ENABLED)->set_handler(NULL);
@@ -1114,6 +1108,15 @@ bool bx_devices_c::is_harddrv_enabled(void)
   return 0;
 }
 
+bool bx_devices_c::is_agp_present(void)
+{
+#if BX_SUPPORT_PCI
+  return (pci.enabled && ((pci.advopts & BX_PCI_ADVOPT_NOAGP) == 0));
+#else
+  return 0;
+#endif
+}
+
 void bx_devices_c::add_sound_device(void)
 {
   sound_device_count++;
@@ -1122,17 +1125,6 @@ void bx_devices_c::add_sound_device(void)
 void bx_devices_c::remove_sound_device(void)
 {
   sound_device_count--;
-}
-
-bool bx_devices_c::is_usb_enabled(void)
-{
-  if (PLUG_device_present("usb_ohci") ||
-      PLUG_device_present("usb_uhci") ||
-      PLUG_device_present("usb_ehci") ||
-      PLUG_device_present("usb_xhci")) {
-    return 1;
-  }
-  return 0;
 }
 
 // removable keyboard/mouse registration
@@ -1302,7 +1294,7 @@ void bx_devices_c::paste_bytes(Bit8u *data, Bit32s length)
   service_paste_buf();
 }
 
-Bit64s bx_devices_c::param_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_devices_c::param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   if (set) {
     char pname[BX_PATHNAME_LEN];
@@ -1379,18 +1371,19 @@ bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
   int first_free_slot = -1;
   Bit16u bus_devfunc = *devfunc;
   char devname[80];
-  char *device;
+  const char *device;
 
   if (strcmp(name, "pci") && strcmp(name, "pci2isa") && strcmp(name, "pci_ide")
       && ((*devfunc & 0xf8) == 0x00)) {
-    if (SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX) {
+    if ((SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX) &&
+        (is_agp_present())) {
       max_pci_slots = 4;
     }
     if (bus == 0) {
       for (i = 0; i < max_pci_slots; i++) {
         sprintf(devname, "pci.slot.%d", i+1);
-        device = SIM->get_param_string(devname)->getptr();
-        if (strlen(device) > 0) {
+        device = SIM->get_param_enum(devname)->get_selected();
+        if (strcmp(device, "none")) {
           if (!strcmp(name, device) && !pci.slot_used[i]) {
             *devfunc = ((i + pci.map_slot_to_dev) << 3) | (*devfunc & 0x07);
             pci.slot_used[i] = 1;
@@ -1406,7 +1399,7 @@ bool bx_devices_c::register_pci_handlers(bx_pci_device_c *dev,
         if (first_free_slot != -1) {
           i = (unsigned)first_free_slot;
           sprintf(devname, "pci.slot.%d", i+1);
-          SIM->get_param_string(devname)->set(name);
+          SIM->get_param_enum(devname)->set_by_name(name);
           *devfunc = ((i + pci.map_slot_to_dev) << 3) | (*devfunc & 0x07);
           pci.slot_used[i] = 1;
           BX_INFO(("PCI slot #%d used by plugin '%s'", i+1, name));

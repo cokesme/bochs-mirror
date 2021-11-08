@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundlow.cc 14139 2021-02-10 07:29:14Z vruppert $
+// $Id: soundlow.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2011-2021  The Bochs Project
@@ -20,7 +20,9 @@
 
 // Common sound module code and base classes for sound lowlevel functions
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 
 #if BX_SUPPORT_SOUNDLOW
 

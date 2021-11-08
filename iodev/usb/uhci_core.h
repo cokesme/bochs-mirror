@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: uhci_core.h 14124 2021-02-04 20:15:13Z vruppert $
+// $Id: uhci_core.h 14148 2021-02-16 17:04:04Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
@@ -193,7 +193,7 @@ protected:
   void update_irq(void);
 
   int  broadcast_packet(USBPacket *p);
-  void set_connect_status(Bit8u port, int type, bool connected);
+  bool set_connect_status(Bit8u port, bool connected);
 
   static void uhci_timer_handler(void *);
   void uhci_timer(void);

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo_func.h 14120 2021-02-03 18:08:04Z vruppert $
+// $Id: voodoo_func.h 14297 2021-07-01 19:32:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  *  Portion of this software comes with the following license
@@ -2962,6 +2962,8 @@ void cmdfifo_process(cmdfifo_info *f)
             BX_DEBUG(("cmdfifo_process(): JMP 0x%08x", f->rdptr));
           }
           break;
+        case 4: // TODO: JMP AGP
+          data = cmdfifo_r(f);
         default:
           BX_ERROR(("CMDFIFO packet type 0: unsupported code %d", code));
       }
@@ -3192,6 +3194,12 @@ void cmdfifo_process(cmdfifo_info *f)
           BX_ERROR(("CMDFIFO packet type 5: unsupported destination type %d", code));
       }
       break;
+    case 6:
+      // TODO: AGP to VRAM transfer
+      cmdfifo_r(f);
+      cmdfifo_r(f);
+      cmdfifo_r(f);
+      cmdfifo_r(f);
     default:
       BX_ERROR(("CMDFIFO: unsupported packet type %d", type));
   }
@@ -3965,18 +3973,6 @@ void voodoo_init(Bit8u _type)
   v->dac.clk0_m = 0x37;
   v->dac.clk0_n = 0x02;
   v->dac.clk0_p = 0x03;
-
-  if (v->type >= VOODOO_BANSHEE) {
-    /* initialize banshee registers */
-    memset(v->banshee.io, 0, sizeof(v->banshee.io));
-    v->banshee.io[io_pciInit0] = 0x01800040;
-    v->banshee.io[io_sipMonitor] = 0x40000000;
-    v->banshee.io[io_lfbMemoryConfig] = 0x000a2200;
-    v->banshee.io[io_dramInit0] = 0x0c579d29;
-    v->banshee.io[io_dramInit1] = 0x00f02200;
-    v->banshee.io[io_tmuGbeInit] = 0x00000bfb;
-    v->banshee.io[io_strapInfo] = 0x00000060;
-  }
 
   /* set up the PCI FIFO */
   v->pci.fifo.base = v->pci.fifo_mem;

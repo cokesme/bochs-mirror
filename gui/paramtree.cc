@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paramtree.cc 14140 2021-02-11 09:29:44Z vruppert $
+// $Id: paramtree.cc 14206 2021-03-28 06:31:03Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2010-2021  The Bochs Project
@@ -231,6 +231,8 @@ Bit64s bx_param_num_c::get64()
 
 void bx_param_num_c::set(Bit64s newval)
 {
+  if (!enabled) return;
+
   if (handler) {
     // the handler can override the new value and/or perform some side effect
     val.number = (*handler)(this, 1, newval);
@@ -270,7 +272,7 @@ void bx_param_num_c::update_dependents()
   }
 }
 
-void bx_param_num_c::set_enabled(int en)
+void bx_param_num_c::set_enabled(bool en)
 {
   // The enable handler may wish to allow/disallow the action
   if (enable_handler) {
@@ -721,7 +723,7 @@ bool bx_param_enum_c::set_by_name(const char *s)
 void bx_param_enum_c::set_dependent_list(bx_list_c *l, bool enable_all)
 {
   dependent_list = l;
-  deps_bitmap = new Bit64u[max - min + 1];
+  deps_bitmap = new Bit64u[(unsigned)(max - min + 1)];
   for (int i=0; i<(max-min+1); i++) {
     if (enable_all) {
       deps_bitmap[i] = (1 << (l->get_size())) - 1;
@@ -763,7 +765,7 @@ void bx_param_enum_c::update_dependents()
   }
 }
 
-void bx_param_enum_c::set_enabled(int en)
+void bx_param_enum_c::set_enabled(bool en)
 {
   // The enable handler may wish to allow/disallow the action
   if (enable_handler) {
@@ -859,7 +861,7 @@ void bx_param_string_c::update_dependents()
   }
 }
 
-void bx_param_string_c::set_enabled(int en)
+void bx_param_string_c::set_enabled(bool en)
 {
   // The enable handler may wish to allow/disallow the action
   if (enable_handler) {
@@ -1326,7 +1328,7 @@ void bx_list_c::remove(const char *name)
   }
 }
 
-void bx_list_c::set_runtime_param(int val)
+void bx_list_c::set_runtime_param(bool val)
 {
   runtime_param = val;
   if (runtime_param) {

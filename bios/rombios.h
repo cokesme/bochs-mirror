@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.h 13788 2020-01-15 17:06:10Z vruppert $
+// $Id: rombios.h 14293 2021-06-27 14:50:26Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2006-2020  The Bochs Project
@@ -257,6 +257,7 @@
 #define PCI_DEVICE_ID_INTEL_82441       0x1237
 #define PCI_DEVICE_ID_INTEL_82443       0x7190
 #define PCI_DEVICE_ID_INTEL_82443_1     0x7191
+#define PCI_DEVICE_ID_INTEL_82443_NOAGP 0x7192
 #define PCI_DEVICE_ID_INTEL_82371FB_0   0x122e
 #define PCI_DEVICE_ID_INTEL_82371FB_1   0x1230
 #define PCI_DEVICE_ID_INTEL_82371SB_0   0x7000

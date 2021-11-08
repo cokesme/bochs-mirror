@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ddc.cc 14130 2021-02-06 19:56:57Z vruppert $
+// $Id: ddc.cc 14260 2021-05-30 07:28:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2018-2021  The Bochs Project
@@ -58,7 +58,7 @@ const Bit8u vesa_EDID[128] = {
                                              is supported) */
   0x21,0x19,                       /* 0x0015 Scren size (330 mm * 250 mm) */
   0x78,                            /* 0x0017 Display gamma (2.2) */
-  0x0D,                            /* 0x0018 Feature flags (no DMPS states, RGB, display is continuous frequency) */
+  0x0F,                            /* 0x0018 Feature flags (no DMPS states, RGB, preferred timing mode, display is continuous frequency) */
   0x78,0xF5,                       /* 0x0019 Least significant bits for chromaticity and default white point */
   0xA6,0x55,0x48,0x9B,0x26,0x12,0x50,0x54,
                                    /* 0x001B Most significant bits for chromaticity and default white point */
@@ -149,7 +149,7 @@ const Bit8u vesa_EDID[128] = {
   0x0A,
 
   0x00,                            /* 0x007E Extension block count (none)  */
-  0x94,                            /* 0x007F Checksum */
+  0x00,                            /* 0x007F Checksum (set by constructor) */
 };
 
 bx_ddc_c::bx_ddc_c(void)
@@ -157,6 +157,7 @@ bx_ddc_c::bx_ddc_c(void)
   int fd, ret;
   struct stat stat_buf;
   const char *path;
+  Bit8u checksum = 0;
 
   put("DDC");
   s.DCKhost = 1;
@@ -195,6 +196,13 @@ bx_ddc_c::bx_ddc_c(void)
     }
     close(fd);
     BX_INFO(("Monitor EDID read from image file '%s'.", path));
+  }
+  s.edid_data[127] = 0;
+  for (int i = 0; i < 128; i++) {
+    checksum += s.edid_data[i];
+  }
+  if (checksum != 0) {
+    s.edid_data[127] = (Bit8u)-checksum;
   }
 }
 

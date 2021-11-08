@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: floppy.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: floppy.cc 14194 2021-03-21 20:53:48Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -107,15 +107,11 @@ static Bit16u drate_in_k[4] = {
 PLUGIN_ENTRY_FOR_MODULE(floppy)
 {
   if (mode == PLUGIN_INIT) {
-    if (type == PLUGTYPE_CORE) {
-      theFloppyController = new bx_floppy_ctrl_c();
-      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theFloppyController, BX_PLUGIN_FLOPPY);
-    } else {
-      return -1;
-    }
+    theFloppyController = new bx_floppy_ctrl_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theFloppyController, BX_PLUGIN_FLOPPY);
   } else if (mode == PLUGIN_FINI) {
     delete theFloppyController;
-  } else {
+  } else if (mode == PLUGIN_PROBE){
     return (int)PLUGTYPE_CORE;
   }
   return 0; // Success
@@ -154,7 +150,7 @@ void bx_floppy_ctrl_c::init(void)
   char pname[10];
   bx_list_c *floppy;
 
-  BX_DEBUG(("Init $Id: floppy.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: floppy.cc 14194 2021-03-21 20:53:48Z vruppert $"));
   DEV_dma_register_8bit_channel(2, dma_read, dma_write, "Floppy Drive");
   DEV_register_irq(6, "Floppy Drive");
   for (unsigned addr=0x03F2; addr<=0x03F7; addr++) {
@@ -1348,56 +1344,62 @@ Bit16u bx_floppy_ctrl_c::dma_read(Bit8u *buffer, Bit16u maxlen)
   // maxlen is the length of the DMA transfer (not implemented yet)
 
   Bit8u drive = BX_FD_THIS s.DOR & 0x03;
-  Bit32u logical_sector, sector_time;
+  Bit32u logical_sector, sector_time, fmt_sectors = 0;
 
   if (BX_FD_THIS s.pending_command == 0x4d) { // format track in progress
-    BX_FD_THIS s.format_count--;
-    switch (3 - (BX_FD_THIS s.format_count & 0x03)) {
-      case 0:
-        if (*buffer < BX_FD_THIS s.media[drive].tracks) {
-          BX_FD_THIS s.cylinder[drive] = *buffer;
-        } else {
-          BX_ERROR(("format track: cylinder out of range"));
-          if (!(BX_FD_THIS s.main_status_reg & FD_MS_NDMA)) {
-            DEV_dma_set_drq(FLOPPY_DMA_CHAN, 0);
+    do {
+      BX_FD_THIS s.format_count--;
+      switch (3 - (BX_FD_THIS s.format_count & 0x03)) {
+        case 0:
+          if (*buffer < BX_FD_THIS s.media[drive].tracks) {
+            BX_FD_THIS s.cylinder[drive] = *buffer;
+          } else {
+            BX_ERROR(("format track: cylinder out of range"));
+            if (!(BX_FD_THIS s.main_status_reg & FD_MS_NDMA)) {
+              DEV_dma_set_drq(FLOPPY_DMA_CHAN, 0);
+            }
+            BX_FD_THIS s.status_reg0 = 0x40 | (BX_FD_THIS s.head[drive]<<2) | drive;
+            BX_FD_THIS s.status_reg1 = 0x04;
+            BX_FD_THIS s.status_reg2 = 0x00;
+            enter_result_phase();
+            return 1;
           }
-          BX_FD_THIS s.status_reg0 = 0x40 | (BX_FD_THIS s.head[drive]<<2) | drive;
-          BX_FD_THIS s.status_reg1 = 0x04;
-          BX_FD_THIS s.status_reg2 = 0x00;
-          enter_result_phase();
-          return 1;
-        }
-        break;
-      case 1:
-        if (*buffer != BX_FD_THIS s.head[drive])
-          BX_ERROR(("head number does not match head field"));
-        break;
-      case 2:
-        BX_FD_THIS s.sector[drive] = *buffer;
-        break;
-      case 3:
-        if (*buffer != 2) BX_ERROR(("dma_read: sector size %d not supported", 128<<(*buffer)));
-        BX_DEBUG(("formatting cylinder %u head %u sector %u",
-                  BX_FD_THIS s.cylinder[drive], BX_FD_THIS s.head[drive],
-                  BX_FD_THIS s.sector[drive]));
-        for (unsigned i = 0; i < 512; i++) {
-          BX_FD_THIS s.floppy_buffer[i] = BX_FD_THIS s.format_fillbyte;
-        }
-        logical_sector = (BX_FD_THIS s.cylinder[drive] * BX_FD_THIS s.media[drive].heads * BX_FD_THIS s.media[drive].sectors_per_track) +
-                         (BX_FD_THIS s.head[drive] * BX_FD_THIS s.media[drive].sectors_per_track) +
-                         (BX_FD_THIS s.sector[drive] - 1);
-        floppy_xfer(drive, logical_sector*512, BX_FD_THIS s.floppy_buffer,
-                    512, TO_FLOPPY);
-        if (!(BX_FD_THIS s.main_status_reg & FD_MS_NDMA)) {
-          DEV_dma_set_drq(FLOPPY_DMA_CHAN, 0);
-        }
-        // time to write one sector at 300 rpm
-        sector_time = 200000 / BX_FD_THIS s.media[drive].sectors_per_track;
-        bx_pc_system.activate_timer(BX_FD_THIS s.floppy_timer_index,
-                                    sector_time , 0);
-        break;
+          break;
+        case 1:
+          if (*buffer != BX_FD_THIS s.head[drive])
+            BX_ERROR(("head number does not match head field"));
+          break;
+        case 2:
+          BX_FD_THIS s.sector[drive] = *buffer;
+          break;
+        case 3:
+          if (*buffer != 2) BX_ERROR(("dma_read: sector size %d not supported", 128<<(*buffer)));
+          BX_DEBUG(("formatting cylinder %u head %u sector %u",
+                    BX_FD_THIS s.cylinder[drive], BX_FD_THIS s.head[drive],
+                    BX_FD_THIS s.sector[drive]));
+          for (unsigned i = 0; i < 512; i++) {
+            BX_FD_THIS s.floppy_buffer[i] = BX_FD_THIS s.format_fillbyte;
+          }
+          logical_sector = (BX_FD_THIS s.cylinder[drive] * BX_FD_THIS s.media[drive].heads * BX_FD_THIS s.media[drive].sectors_per_track) +
+                           (BX_FD_THIS s.head[drive] * BX_FD_THIS s.media[drive].sectors_per_track) +
+                           (BX_FD_THIS s.sector[drive] - 1);
+          floppy_xfer(drive, logical_sector*512, BX_FD_THIS s.floppy_buffer,
+                      512, TO_FLOPPY);
+          fmt_sectors++;
+          break;
+      }
+      buffer++;
+    } while (--maxlen > 0);
+    if (fmt_sectors > 0) {
+      if (!(BX_FD_THIS s.main_status_reg & FD_MS_NDMA)) {
+        DEV_dma_set_drq(FLOPPY_DMA_CHAN, 0);
+      }
+      // time to write one sector at 300 rpm
+      sector_time = (200000 / BX_FD_THIS s.media[drive].sectors_per_track) * fmt_sectors;
+      bx_pc_system.activate_timer(BX_FD_THIS s.floppy_timer_index,
+                                  sector_time , 0);
     }
-    return 1;
+    return maxlen;
   } else { // write normal data
     Bit16u len = 512 - BX_FD_THIS s.floppy_buffer_index;
     if (len > maxlen) len = maxlen;
@@ -1956,7 +1958,7 @@ bool bx_floppy_ctrl_c::get_tc(void)
 
 // floppy runtime parameter handling
 
-Bit64s bx_floppy_ctrl_c::floppy_param_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_floppy_ctrl_c::floppy_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   bx_list_c *base = (bx_list_c*) param->get_parent();
   Bit8u drive;
@@ -1974,7 +1976,7 @@ Bit64s bx_floppy_ctrl_c::floppy_param_handler(bx_param_c *param, int set, Bit64s
 }
 
 const char* bx_floppy_ctrl_c::floppy_param_string_handler(bx_param_string_c *param,
-                                int set, const char *oldval, const char *val, int maxlen)
+                                bool set, const char *oldval, const char *val, int maxlen)
 {
   char pname[BX_PATHNAME_LEN];
   Bit8u drive;
@@ -1985,7 +1987,7 @@ const char* bx_floppy_ctrl_c::floppy_param_string_handler(bx_param_string_c *par
   }
   param->get_param_path(pname, BX_PATHNAME_LEN);
   if ((!strncmp(pname, "floppy", 6)) && (!strcmp(param->get_name(), "path"))) {
-    if (set==1) {
+    if (set) {
       drive = atoi(base->get_name());
       if (SIM->get_param_enum("devtype", base)->get() == BX_FDD_NONE) {
         BX_ERROR(("Cannot add a floppy drive at runtime"));

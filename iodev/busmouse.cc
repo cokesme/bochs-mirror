@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: busmouse.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: busmouse.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2004-2021  The Bochs Project
@@ -88,7 +88,7 @@ PLUGIN_ENTRY_FOR_MODULE(busmouse)
     BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theBusMouse, BX_PLUGIN_BUSMOUSE);
   } else if (mode == PLUGIN_FINI) {
     delete theBusMouse;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
   }
   return 0; // Success
@@ -107,7 +107,7 @@ bx_busm_c::~bx_busm_c()
 
 void bx_busm_c::init(void)
 {
-  BX_DEBUG(("Init $Id: busmouse.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: busmouse.cc 14163 2021-02-26 20:37:49Z vruppert $"));
 
   BX_BUSM_THIS type = SIM->get_param_enum(BXPN_MOUSE_TYPE)->get();
 

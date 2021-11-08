@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: acpi.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: acpi.cc 14175 2021-03-07 16:01:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2006-2021  The Bochs Project
@@ -73,9 +73,8 @@ PLUGIN_ENTRY_FOR_MODULE(acpi)
     bx_devices.pluginACPIController = theACPIController;
     BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theACPIController, BX_PLUGIN_ACPI);
   } else if (mode == PLUGIN_FINI) {
-    bx_devices.pluginACPIController = &bx_devices.stubACPIController;
     delete theACPIController;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_STANDARD;
   }
   return 0; // Success

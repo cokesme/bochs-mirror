@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcipnic.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: pcipnic.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003  Fen Systems Ltd. (http://www.fensystems.co.uk/)
@@ -111,8 +111,10 @@ PLUGIN_ENTRY_FOR_MODULE(pcipnic)
     bx_list_c *menu = (bx_list_c*)SIM->get_param("network");
     menu->remove("pnic");
     delete thePNICDevice;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
   return 0; // Success
 }

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hdimage.h 14139 2021-02-10 07:29:14Z vruppert $
+// $Id: hdimage.h 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2005-2021  The Bochs Project
@@ -140,6 +140,7 @@
 
 class device_image_t;
 class redolog_t;
+class cdrom_base_c;
 
 #ifdef BXIMAGE
 int bx_create_image_file(const char *filename);

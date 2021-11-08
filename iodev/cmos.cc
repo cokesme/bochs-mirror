@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cmos.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: cmos.cc 14175 2021-03-07 16:01:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -103,19 +103,12 @@ Bit8u bin_to_bcd(Bit8u value, bool is_binary)
 PLUGIN_ENTRY_FOR_MODULE(cmos)
 {
   if (mode == PLUGIN_INIT) {
-    if (type == PLUGTYPE_CORE) {
-      theCmosDevice = new bx_cmos_c();
-      bx_devices.pluginCmosDevice = theCmosDevice;
-      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theCmosDevice, BX_PLUGIN_CMOS);
-    } else {
-      return -1;
-    }
+    theCmosDevice = new bx_cmos_c();
+    bx_devices.pluginCmosDevice = theCmosDevice;
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theCmosDevice, BX_PLUGIN_CMOS);
   } else if (mode == PLUGIN_FINI) {
-    if (theCmosDevice != NULL) {
-      delete theCmosDevice;
-      theCmosDevice = NULL;
-    }
-  } else {
+    delete theCmosDevice;
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_CORE;
   }
   return 0; // Success
@@ -145,7 +138,7 @@ bx_cmos_c::~bx_cmos_c(void)
 
 void bx_cmos_c::init(void)
 {
-  BX_DEBUG(("Init $Id: cmos.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: cmos.cc 14175 2021-03-07 16:01:39Z vruppert $"));
   // CMOS RAM & RTC
 
   DEV_register_ioread_handler(this, read_handler, 0x0070, "CMOS RAM", 1);

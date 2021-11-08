@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: svm.h 14086 2021-01-30 08:35:35Z sshwarts $
+// $Id: svm.h 14193 2021-03-21 15:33:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2015 Stanislav Shwartsman
@@ -255,6 +255,8 @@ typedef struct bx_SVM_HOST_STATE
   Bit64u rsp;
   Bit64u rax;
 
+  BxPackedRegister pat_msr;
+
 } SVM_HOST_STATE;
 
 typedef struct bx_SVM_GUEST_STATE
@@ -271,6 +273,7 @@ typedef struct bx_SVM_GUEST_STATE
   Bit32u dr6;
   Bit32u dr7;
   bx_phy_address cr3;
+  BxPackedRegister pat_msr;
   Bit32u eflags;
   Bit64u rip;
   Bit64u rsp;

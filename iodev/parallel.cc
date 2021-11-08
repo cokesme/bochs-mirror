@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parallel.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: parallel.cc 14174 2021-03-07 11:54:50Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -41,7 +41,9 @@ void parport_init_options(void)
 {
   char name[4], label[80], descr[80];
 
-  bx_list_c *parallel = (bx_list_c*)SIM->get_param("ports.parallel");
+  bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+  bx_list_c *parallel = new bx_list_c(ports, "parallel", "Parallel Port Options");
+  parallel->set_options(parallel->SHOW_PARENT);
   for (int i=0; i<BX_N_PARALLEL_PORTS; i++) {
     sprintf(name, "%d", i+1);
     sprintf(label, "Parallel Port %d", i+1);
@@ -113,17 +115,12 @@ PLUGIN_ENTRY_FOR_MODULE(parallel)
     SIM->register_addon_option("parport1", parport_options_parser, parport_options_save);
     SIM->register_addon_option("parport2", parport_options_parser, NULL);
   } else if (mode == PLUGIN_FINI) {
-    char port[10];
-
     delete theParallelDevice;
-    bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.parallel");
-    for (int i=0; i<BX_N_PARALLEL_PORTS; i++) {
-      sprintf(port, "parport%d", i+1);
-      SIM->unregister_addon_option(port);
-      sprintf(port, "%d", i+1);
-      menu->remove(port);
-    }
-  } else {
+    SIM->unregister_addon_option("parport1");
+    SIM->unregister_addon_option("parport2");
+    bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+    ports->remove("parallel");
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
   }
   return 0; // Success
@@ -159,7 +156,7 @@ void bx_parallel_c::init(void)
   bx_list_c *base, *misc_rt = NULL, *menu = NULL;
   int count = 0;
 
-  BX_DEBUG(("Init $Id: parallel.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: parallel.cc 14174 2021-03-07 11:54:50Z vruppert $"));
 
   for (unsigned i=0; i<BX_N_PARALLEL_PORTS; i++) {
     sprintf(pname, "ports.parallel.%d", i+1);
@@ -449,7 +446,7 @@ void bx_parallel_c::write(Bit32u address, Bit32u value, unsigned io_len)
   }
 }
 
-const char* bx_parallel_c::parport_file_param_handler(bx_param_string_c *param, int set,
+const char* bx_parallel_c::parport_file_param_handler(bx_param_string_c *param, bool set,
                                                       const char *oldval, const char *val,
                                                       int maxlen)
 {

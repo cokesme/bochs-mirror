@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo_data.h 14120 2021-02-03 18:08:04Z vruppert $
+// $Id: voodoo_data.h 14309 2021-07-07 06:54:30Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  *  Portion of this software comes with the following license
@@ -1768,8 +1768,8 @@ struct _banshee_info
     bool   dst_tiled;
     Bit8u  dst_fmt;
     Bit16u dst_pitch;
-    Bit16u dst_x;
-    Bit16u dst_y;
+    Bit16s dst_x;
+    Bit16s dst_y;
     Bit16u dst_w;
     Bit16u dst_h;
     Bit8u  fgcolor[4];
@@ -1780,7 +1780,6 @@ struct _banshee_info
     Bit16u clipy1[2];
     Bit16u h2s_pitch;
     Bit8u  h2s_pxstart;
-    bool   h2s_alt_align;
     bool   pgn_init;
     Bit32u pgn_val;
     Bit16u pgn_l0x;

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: iodebug.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: iodebug.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -44,7 +44,7 @@ PLUGIN_ENTRY_FOR_MODULE(iodebug)
   } else if (mode == PLUGIN_FINI) {
     bx_devices.pluginIODebug = &bx_devices.stubIODebug;
     delete theIODebugDevice;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
   }
   return(0); // Success

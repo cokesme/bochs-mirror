@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: main.cc 14129 2021-02-06 16:51:55Z vruppert $
+// $Id: main.cc 14204 2021-03-27 17:23:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -21,10 +21,6 @@
 #include "bochs.h"
 #include "bxversion.h"
 #include "param_names.h"
-#include "gui/textconfig.h"
-#if BX_USE_WIN32CONFIG
-#include "gui/win32dialog.h"
-#endif
 #include "cpu/cpu.h"
 #include "iodev/iodev.h"
 #include "iodev/hdimage/hdimage.h"
@@ -33,6 +29,9 @@
 #endif
 #if BX_SUPPORT_SOUNDLOW
 #include "iodev/sound/soundmod.h"
+#endif
+#if BX_SUPPORT_PCIUSB
+#include "iodev/usb/usb_common.h"
 #endif
 
 #ifdef HAVE_LOCALE_H
@@ -323,27 +322,14 @@ int bxmain(void)
     // If one exists, start it.  If not, just begin.
     bx_param_enum_c *ci_param = SIM->get_param_enum(BXPN_SEL_CONFIG_INTERFACE);
     const char *ci_name = ci_param->get_selected();
-    if (!strcmp(ci_name, "textconfig")) {
-#if BX_USE_TEXTCONFIG
-      init_text_config_interface();   // in textconfig.h
-#else
-      BX_PANIC(("configuration interface 'textconfig' not present"));
-#endif
-    }
-    else if (!strcmp(ci_name, "win32config")) {
-#if BX_USE_WIN32CONFIG
-      init_win32_config_interface();
-#else
-      BX_PANIC(("configuration interface 'win32config' not present"));
-#endif
-    }
 #if BX_WITH_WX
-    else if (!strcmp(ci_name, "wx")) {
-      PLUG_load_gui_plugin("wx");
+    if (!strcmp(ci_name, "wx")) {
+      PLUG_load_plugin_var("wx", PLUGTYPE_GUI);
     }
+    else
 #endif
-    else {
-      BX_PANIC(("unsupported configuration interface '%s'", ci_name));
+    {
+      PLUG_load_plugin_var(ci_name, PLUGTYPE_CI);
     }
     ci_param->set_enabled(0);
     int status = SIM->configuration_interface(ci_name, CI_START);
@@ -971,7 +957,7 @@ bool load_and_init_display_lib(void)
     }
     BX_ERROR(("changing display library to '%s' instead", gui_name));
   }
-  PLUG_load_gui_plugin(gui_name);
+  PLUG_load_plugin_var(gui_name, PLUGTYPE_GUI);
 
 #if BX_GUI_SIGHANDLER
   // set the flag for guis requiring a GUI sighandler.
@@ -1305,6 +1291,9 @@ void bx_init_hardware()
 #endif
 #if BX_SUPPORT_SOUNDLOW
   bx_soundmod_ctl.list_modules();
+#endif
+#if BX_SUPPORT_PCIUSB
+  bx_usbdev_ctl.list_devices();
 #endif
   // Check if there is a romimage
   if (SIM->get_param_string(BXPN_ROM_PATH)->isempty()) {

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bochs.h 14137 2021-02-09 21:32:35Z vruppert $
+// $Id: bochs.h 14320 2021-07-25 18:01:28Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -121,15 +121,21 @@ int  bx_write_configuration(const char *rcfile, int overwrite);
 void bx_reset_options(void);
 void bx_set_log_actions_by_device(bool panic_flag);
 // special config parameter and options functions for plugins
+#if BX_NETWORKING
 void bx_init_std_nic_options(const char *name, bx_list_c *menu);
+#endif
+#if BX_SUPPORT_PCIUSB
 void bx_init_usb_options(const char *usb_name, const char *pname, int maxports);
+#endif
 int  bx_parse_param_from_list(const char *context, const char *input, bx_list_c *list);
 int  bx_parse_nic_params(const char *context, const char *param, bx_list_c *base);
-int  bx_parse_usb_port_params(const char *context, bool devopt,
-                              const char *param, int maxports, bx_list_c *base);
+int  bx_parse_usb_port_params(const char *context, const char *param,
+                              int maxports, bx_list_c *base);
 int  bx_split_option_list(const char *msg, const char *rawopt, char **argv, int max_argv);
 int  bx_write_param_list(FILE *fp, bx_list_c *base, const char *optname, bool multiline);
+#if BX_SUPPORT_PCIUSB
 int  bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base);
+#endif
 
 Bit32u crc32(const Bit8u *buf, int len);
 
@@ -298,15 +304,8 @@ typedef struct {
 BOCHSAPI_MSVCONLY void bx_show_ips_handler(void);
 #endif
 void CDECL bx_signal_handler(int signum);
-int bx_atexit(void);
+BOCHSAPI_MSVCONLY int bx_atexit(void);
 BOCHSAPI extern bx_debug_t bx_dbg;
-
-enum {
-#define bx_define_cpudb(model) bx_cpudb_##model,
-#include "cpudb.h"
-  bx_cpudb_model_last
-};
-#undef bx_define_cpudb
 
 #if BX_SUPPORT_SMP
   #define BX_SMP_PROCESSORS (bx_cpu_count)

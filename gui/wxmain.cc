@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.cc 14094 2021-01-30 18:32:52Z vruppert $
+// $Id: wxmain.cc 14183 2021-03-13 09:54:06Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -73,6 +73,7 @@
 #include <wx/clipbrd.h>
 
 #include "osdep.h"               // workarounds for missing stuff
+#include "gui/paramtree.h"       // config parameter tree
 #include "gui/siminterface.h"    // interface to the simulator
 #include "bxversion.h"           // get version string
 #include "wxdialog.h"            // custom dialog boxes
@@ -96,10 +97,9 @@
 #include "icon_bochs.xpm"
 #endif
 
-// FIXME: ugly global variables that the bx_gui_c object in wx.cc can use
-// to access the MyFrame and the MyPanel.
+// FIXME: ugly global variable that the bx_gui_c object in wx.cc can use
+// to access the MyFrame.
 MyFrame *theFrame = NULL;
-MyPanel *thePanel = NULL;
 
 // The wxBochsClosing flag is used to keep track of when the wxWidgets GUI is
 // shutting down.  Shutting down can be somewhat complicated because the
@@ -218,7 +218,7 @@ IMPLEMENT_APP_NO_MAIN(MyApp)
 
 // this is the entry point of the wxWidgets code.  It is called as follows:
 // 1. main() loads the wxWidgets plugin (if necessary) and calls
-// libwx_LTX_plugin_entry(), which installs a function pointer to the
+// libwx_gui_plugin_entry(), which installs a function pointer to the
 // wx_ci_callback() function.
 // 2. main() calls SIM->configuration_interface.
 // 3. bx_real_sim_c::configuration_interface calls the function pointer that
@@ -346,52 +346,6 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
   EVT_TOOL(ID_Toolbar_User, MyFrame::OnToolbarClick)
 END_EVENT_TABLE()
 
-//////////////////////////////////////////////////////////////////
-// Menu layout (approximate)
-//
-// The actual menus will be changing so this probably isn't up
-// to date, but having it in text form was useful in planning.
-//////////////////////////////////////////////////////////////////
-// - File
-//   +----------------------+
-//   | New Configuration    |
-//   | Read Configuration   |
-//   | Save Configuration   |
-//   +----------------------+
-//   | Quit                 |
-//   +----------------------+
-// - Edit
-//   +----------------------+
-//   | Floppy Disk 0...     |
-//   | Floppy Disk 1...     |
-//   | Hard Disk 0...       |
-//   | Hard Disk 1...       |
-//   | Cdrom...             |
-//   | Boot...              |
-//   | VGA...               |
-//   | Memory...            |
-//   | Sound...             |
-//   | Networking...        |
-//   | Keyboard...          |
-//   | Other...             |
-//   +----------------------+
-// - Simulate
-//   +----------------------+
-//   | Start                |
-//   | Pause/Resume         |
-//   | Stop                 |
-//   +----------------------|
-// - Event Log
-//   +----------------------+
-//   | View                 |
-//   | Preferences...       |
-//   | By Device...         |
-//   +----------------------+
-// - Help
-//   +----------------------+
-//   | About Bochs...       |
-//   +----------------------+
-//////////////////////////////////////////////////////////////////
 
 MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size, const long style)
 : wxFrame((wxFrame *)NULL, -1, title, pos, size, style)
@@ -587,11 +541,16 @@ void MyFrame::OnEditCPU(wxCommandEvent& WXUNUSED(event))
 
 void MyFrame::OnEditCPUID(wxCommandEvent& WXUNUSED(event))
 {
-  ParamDialog dlg(this, -1);
   bx_list_c *list = (bx_list_c*) SIM->get_param("cpuid");
-  dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
-  dlg.AddParam(list);
-  dlg.ShowModal();
+  if (list != NULL) {
+    ParamDialog dlg(this, -1);
+    dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
+    dlg.AddParam(list);
+    dlg.ShowModal();
+  } else {
+    wxMessageBox(wxT("Nothing to configure in this section!"),
+                 wxT("Not enabled"), wxOK | wxICON_ERROR, this);
+  }
 }
 
 void MyFrame::OnEditMemory(wxCommandEvent& WXUNUSED(event))
@@ -656,16 +615,16 @@ void MyFrame::OnEditBoot(wxCommandEvent& WXUNUSED(event))
   if (firstcd != NULL) {
     bootDevices++;
   }
-  if (bootDevices == 0) {
+  if (bootDevices > 0) {
+    ParamDialog dlg(this, -1);
+    bx_list_c *list = (bx_list_c*) SIM->get_param("boot_params");
+    dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
+    dlg.AddParam(list);
+    dlg.ShowModal();
+  } else {
     wxMessageBox(wxT("All the possible boot devices are disabled right now!\nYou must enable the first floppy drive, a hard drive, or a CD-ROM."),
                  wxT("None enabled"), wxOK | wxICON_ERROR, this);
-    return;
   }
-  ParamDialog dlg(this, -1);
-  bx_list_c *list = (bx_list_c*) SIM->get_param("boot_params");
-  dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
-  dlg.AddParam(list);
-  dlg.ShowModal();
 }
 
 void MyFrame::OnEditSerialParallel(wxCommandEvent& WXUNUSED(event))
@@ -680,21 +639,31 @@ void MyFrame::OnEditSerialParallel(wxCommandEvent& WXUNUSED(event))
 
 void MyFrame::OnEditNet(wxCommandEvent& WXUNUSED(event))
 {
-  ParamDialog dlg(this, -1);
   bx_list_c *list = (bx_list_c*) SIM->get_param("network");
-  dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
-  dlg.AddParam(list);
-  dlg.ShowModal();
+  if (list != NULL) {
+    ParamDialog dlg(this, -1);
+    dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
+    dlg.AddParam(list);
+    dlg.ShowModal();
+  } else {
+    wxMessageBox(wxT("Nothing to configure in this section!"),
+                 wxT("Not enabled"), wxOK | wxICON_ERROR, this);
+  }
 }
 
 void MyFrame::OnEditSound(wxCommandEvent& WXUNUSED(event))
 {
-  ParamDialog dlg(this, -1);
   bx_list_c *list = (bx_list_c*) SIM->get_param("sound");
-  dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
-  dlg.AddParam(list);
-  dlg.SetRuntimeFlag(sim_thread != NULL);
-  dlg.ShowModal();
+  if (list->get_size() > 0) {
+    ParamDialog dlg(this, -1);
+    dlg.SetTitle(wxString(list->get_title(), wxConvUTF8));
+    dlg.AddParam(list);
+    dlg.SetRuntimeFlag(sim_thread != NULL);
+    dlg.ShowModal();
+  } else {
+    wxMessageBox(wxT("Nothing to configure in this section!"),
+                 wxT("Not enabled"), wxOK | wxICON_ERROR, this);
+  }
 }
 
 void MyFrame::OnEditOther(wxCommandEvent& WXUNUSED(event))
@@ -1279,7 +1248,7 @@ void MyFrame::OnToolbarClick(wxCommandEvent& event)
     case ID_Toolbar_Copy: which = BX_TOOLBAR_COPY; break;
     case ID_Toolbar_Paste: which = BX_TOOLBAR_PASTE; break;
     case ID_Toolbar_Snapshot: which = BX_TOOLBAR_SNAPSHOT; break;
-    case ID_Toolbar_Mouse_en: thePanel->ToggleMouse(true); break;
+    case ID_Toolbar_Mouse_en: panel->ToggleMouse(true); break;
     case ID_Toolbar_User: which = BX_TOOLBAR_USER; break;
     default:
       wxLogError(wxT("unknown toolbar id %d"), id);

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_cbi.h 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: usb_floppy.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  UFI/CBI floppy disk storage device support
@@ -22,8 +22,8 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 /////////////////////////////////////////////////////////////////////////
 
-#ifndef BX_IODEV_USB_CBI_H
-#define BX_IODEV_USB_CBI_H
+#ifndef BX_IODEV_USB_FLOPPY_H
+#define BX_IODEV_USB_FLOPPY_H
 
 #define UFI_TEST_UNIT_READY             0x00
 #define UFI_REZERO                      0x01
@@ -47,10 +47,10 @@
 
 class device_image_t;
 
-class usb_cbi_device_c : public usb_device_c {
+class usb_floppy_device_c : public usb_device_c {
 public:
-  usb_cbi_device_c(const char *filename);
-  virtual ~usb_cbi_device_c(void);
+  usb_floppy_device_c(void);
+  virtual ~usb_floppy_device_c(void);
 
   virtual bool init();
   virtual bool set_option(const char *option);
@@ -107,9 +107,9 @@ private:
   void copy_data(USBPacket *p);
   bool set_inserted(bool value);
 
-  static const char *floppy_path_handler(bx_param_string_c *param, int set,
+  static const char *floppy_path_handler(bx_param_string_c *param, bool set,
                                          const char *oldval, const char *val, int maxlen);
-  static Bit64s floppy_param_handler(bx_param_c *param, int set, Bit64s val);
+  static Bit64s floppy_param_handler(bx_param_c *param, bool set, Bit64s val);
 
   static Bit64s param_save_handler(void *devptr, bx_param_c *param);
   static void param_restore_handler(void *devptr, bx_param_c *param, Bit64s val);

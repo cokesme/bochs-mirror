@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ioapic.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: ioapic.cc 14229 2021-04-18 17:20:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -41,9 +41,8 @@ PLUGIN_ENTRY_FOR_MODULE(ioapic)
     bx_devices.pluginIOAPIC = theIOAPIC;
     BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theIOAPIC, BX_PLUGIN_IOAPIC);
   } else if (mode == PLUGIN_FINI) {
-    bx_devices.pluginIOAPIC = &bx_devices.stubIOAPIC;
     delete theIOAPIC;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_STANDARD;
   }
   return(0); // Success
@@ -120,7 +119,7 @@ void bx_io_redirect_entry_t::register_state(bx_param_c *parent)
 #define BX_IOAPIC_BASE_ADDR  (0xfec00000)
 #define BX_IOAPIC_DEFAULT_ID (BX_SMP_PROCESSORS)
 
-bx_ioapic_c::bx_ioapic_c(): enabled(0), base_addr(BX_IOAPIC_BASE_ADDR)
+bx_ioapic_c::bx_ioapic_c(): enabled(0), base_addr(BX_IOAPIC_BASE_ADDR), intin(0)
 {
   set_id(BX_IOAPIC_DEFAULT_ID);
   put("IOAPIC");

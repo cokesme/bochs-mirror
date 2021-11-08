@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_fbsd.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: eth_fbsd.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -48,7 +48,9 @@
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_FBSD
@@ -114,7 +116,7 @@ public:
                      const char *macaddr,
                      eth_rx_handler_t rxh,
                      eth_rx_status_t rxstat,
-                     bx_devmodel_c *dev, const char *script);
+                     logfunctions *netdev, const char *script);
   virtual ~bx_fbsd_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
 
@@ -143,8 +145,8 @@ protected:
                            const char *macaddr,
                            eth_rx_handler_t rxh,
                            eth_rx_status_t rxstat,
-                           bx_devmodel_c *dev, const char *script) {
-    return (new bx_fbsd_pktmover_c(netif, macaddr, rxh, rxstat, dev, script));
+                           logfunctions *netdev, const char *script) {
+    return (new bx_fbsd_pktmover_c(netif, macaddr, rxh, rxstat, netdev, script));
   }
 } bx_fbsd_match;
 
@@ -162,7 +164,7 @@ bx_fbsd_pktmover_c::bx_fbsd_pktmover_c(const char *netif,
                                        const char *macaddr,
                                        eth_rx_handler_t rxh,
                                        eth_rx_status_t rxstat,
-                                       bx_devmodel_c *dev,
+                                       logfunctions *netdev,
                                        const char *script)
 {
   char device[sizeof "/dev/bpf000"];
@@ -172,7 +174,7 @@ bx_fbsd_pktmover_c::bx_fbsd_pktmover_c(const char *netif,
   struct bpf_program bp;
   u_int v;
 
-  this->netdev = dev;
+  this->netdev = netdev;
   BX_INFO(("freebsd network driver"));
   memcpy(fbsd_macaddr, macaddr, 6);
 

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ehci.h 14124 2021-02-04 20:15:13Z vruppert $
+// $Id: usb_ehci.h 14158 2021-02-20 19:58:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Experimental USB EHCI adapter (partly ported from Qemu)
@@ -334,9 +334,6 @@ public:
 
   void event_handler(int event, USBPacket *packet, int port);
 
-  static const char *usb_param_handler(bx_param_string_c *param, int set,
-                                       const char *oldval, const char *val, int maxlen);
-
 private:
   bx_uhci_core_c *uhci[3];
   bx_usb_ehci_t hub;
@@ -350,7 +347,7 @@ private:
 
   static void init_device(Bit8u port, bx_list_c *portconf);
   static void remove_device(Bit8u port);
-  static void set_connect_status(Bit8u port, int type, bool connected);
+  static bool set_connect_status(Bit8u port, bool connected);
   static void change_port_owner(int port);
 
   // EHCI core methods ported from QEMU 1.2.2
@@ -420,6 +417,9 @@ private:
 
   static void runtime_config_handler(void *);
   void runtime_config(void);
+
+  static Bit64s usb_param_handler(bx_param_c *param, bool set, Bit64s val);
+  static bool usb_param_enable_handler(bx_param_c *param, bool en);
 };
 
 #endif  // BX_IODEV_USB_EHCI_H

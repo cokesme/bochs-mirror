@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: voodoo.cc 14316 2021-07-18 07:25:08Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2012-2021  The Bochs Project
@@ -159,14 +159,15 @@ PLUGIN_ENTRY_FOR_MODULE(voodoo)
     if (theVoodooVga != NULL) {
       delete theVoodooVga;
       theVoodooVga = NULL;
-      bx_devices.pluginVgaDevice = &bx_devices.stubVga;
     }
     if (theVoodooDevice != NULL) {
       delete theVoodooDevice;
       theVoodooDevice = NULL;
     }
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)(PLUGTYPE_VGA | PLUGTYPE_OPTIONAL);
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
   return 0; // Success
 }
@@ -293,6 +294,8 @@ void bx_voodoo_base_c::init(void)
   }
   s.model = (Bit8u)SIM->get_param_enum("model", base)->get();
   s.devfunc = 0x00;
+  v = new voodoo_state;
+  memset(v, 0, sizeof(voodoo_state));
   init_model();
   if (s.vertical_timer_id == BX_NULL_TIMER_HANDLE) {
     s.vertical_timer_id = bx_virt_timer.register_timer(this, vertical_timer_handler,
@@ -300,8 +303,6 @@ void bx_voodoo_base_c::init(void)
   }
   s.vdraw.gui_update_pending = 0;
 
-  v = new voodoo_state;
-  memset(v, 0, sizeof(voodoo_state));
   BX_INIT_MUTEX(fifo_mutex);
   BX_INIT_MUTEX(render_mutex);
   if (s.model >= VOODOO_2) {
@@ -350,6 +351,7 @@ void bx_voodoo_base_c::voodoo_register_state(bx_list_c *parent)
   }
   new bx_shadow_num_c(dac, "read_result", &v->dac.read_result, BASE_HEX);
   new bx_shadow_num_c(dac, "vidclk", &v->vidclk);
+  BXRS_PARAM_BOOL(vstate, vtimer_running, v->vtimer_running);
   bx_list_c *fbi = new bx_list_c(vstate, "fbi", "framebuffer");
   if ((s.model < VOODOO_BANSHEE) || (theVoodooVga == NULL)) {
     new bx_shadow_data_c(fbi, "ram", v->fbi.ram, v->fbi.mask + 1);
@@ -1061,6 +1063,7 @@ bool bx_voodoo_1_2_c::update_timing(void)
     vertical_timer_handler(this);
   }
   BX_INFO(("Voodoo output %dx%d@%uHz", v->fbi.width, v->fbi.height, (unsigned)v->vertfreq));
+  v->fbi.swaps_pending = 0;
   v->vtimer_running = 1;
   bx_virt_timer.activate_timer(s.vertical_timer_id, (Bit32u)s.vdraw.vtotal_usec, 1);
   return 1;

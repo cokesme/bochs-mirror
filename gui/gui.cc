@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gui.cc 14094 2021-01-30 18:32:52Z vruppert $
+// $Id: gui.cc 14274 2021-06-07 11:30:08Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -150,6 +150,7 @@ bx_gui_c::bx_gui_c(void): disp_mode(DISP_MODE_SIM)
   command_mode.active = 0;
   marker_count = 0;
   memset(palette, 0, sizeof(palette));
+  memset(vga_charmap, 0, 0x2000);
 }
 
 bx_gui_c::~bx_gui_c()
@@ -933,8 +934,10 @@ int bx_gui_c::register_statusitem(const char *text, bool auto_off)
     }
   }
   if (id == statusitem_count) {
-    if (++statusitem_count > BX_MAX_STATUSITEMS) {
+    if (statusitem_count == BX_MAX_STATUSITEMS) {
       return -1;
+    } else {
+      statusitem_count++;
     }
   }
   statusitem[id].in_use = 1;
@@ -1452,6 +1455,7 @@ void bx_gui_c::console_cleanup(void)
   set_text_charmap(console.saved_charmap);
   dimension_update(console.saved_xres, console.saved_yres, fheight, fwidth,
                    console.saved_bpp);
+  DEV_vga_refresh(1);
   console.running = 0;
 }
 

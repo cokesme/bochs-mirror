@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: serial.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: serial.cc 14312 2021-07-12 19:05:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -81,7 +81,9 @@ void serial_init_options(void)
 {
   char name[4], label[80], descr[120];
 
-  bx_list_c *serial = (bx_list_c*)SIM->get_param("ports.serial");
+  bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+  bx_list_c *serial = new bx_list_c(ports, "serial", "Serial Port Options");
+  serial->set_options(serial->SHOW_PARENT);
   for (int i=0; i<BX_N_SERIAL_PORTS; i++) {
     sprintf(name, "%d", i+1);
     sprintf(label, "Serial Port %d", i+1);
@@ -164,17 +166,14 @@ PLUGIN_ENTRY_FOR_MODULE(serial)
     SIM->register_addon_option("com3", serial_options_parser, NULL);
     SIM->register_addon_option("com4", serial_options_parser, NULL);
   } else if (mode == PLUGIN_FINI) {
-    char port[6];
-
     delete theSerialDevice;
-    bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.serial");
-    for (int i=0; i<BX_N_SERIAL_PORTS; i++) {
-      sprintf(port, "com%d", i+1);
-      SIM->unregister_addon_option(port);
-      sprintf(port, "%d", i+1);
-      menu->remove(port);
-    }
-  } else {
+    SIM->unregister_addon_option("com1");
+    SIM->unregister_addon_option("com2");
+    SIM->unregister_addon_option("com3");
+    SIM->unregister_addon_option("com4");
+    bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+    ports->remove("serial");
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
   }
   return 0; // Success
@@ -1552,7 +1551,7 @@ void bx_serial_c::rx_timer(void)
           SOCKET socketid = BX_SER_THIS s[port].socket_id;
           if (socketid >= 0) {
             FD_SET(socketid, &fds);
-            if (select(socketid+1, &fds, NULL, NULL, &tval) == 1) {
+            if (select((int)(socketid+1), &fds, NULL, NULL, &tval) == 1) {
               ssize_t bytes = (ssize_t)
               ::recv(socketid, (char*) &chbuf, 1, 0);
               if (bytes > 0) {
@@ -1771,7 +1770,7 @@ void bx_serial_c::update_mouse_data()
   BX_SER_THIS mouse_update = 0;
 }
 
-const char* bx_serial_c::serial_file_param_handler(bx_param_string_c *param, int set,
+const char* bx_serial_c::serial_file_param_handler(bx_param_string_c *param, bool set,
                                                    const char *oldval, const char *val,
                                                    int maxlen)
 {

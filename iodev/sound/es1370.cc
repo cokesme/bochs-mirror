@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: es1370.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: es1370.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // ES1370 soundcard support (ported from QEMU)
@@ -203,8 +203,10 @@ PLUGIN_ENTRY_FOR_MODULE(es1370)
     bx_list_c *menu = (bx_list_c*)SIM->get_param("sound");
     menu->remove("es1370");
     bx_devices.remove_sound_device();
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
   return 0; // Success
 }
@@ -1117,7 +1119,7 @@ void bx_es1370_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len
 }
 
 // runtime parameter handlers
-Bit64s bx_es1370_c::es1370_param_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_es1370_c::es1370_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   if (set) {
     const char *pname = param->get_name();
@@ -1136,7 +1138,7 @@ Bit64s bx_es1370_c::es1370_param_handler(bx_param_c *param, int set, Bit64s val)
   return val;
 }
 
-const char* bx_es1370_c::es1370_param_string_handler(bx_param_string_c *param, int set,
+const char* bx_es1370_c::es1370_param_string_handler(bx_param_string_c *param, bool set,
                                                  const char *oldval, const char *val,
                                                  int maxlen)
 {

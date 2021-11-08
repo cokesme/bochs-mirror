@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci2isa.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: pci2isa.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -42,16 +42,12 @@ bx_piix3_c *thePci2IsaBridge = NULL;
 PLUGIN_ENTRY_FOR_MODULE(pci2isa)
 {
   if (mode == PLUGIN_INIT) {
-    if (type == PLUGTYPE_CORE) {
-      thePci2IsaBridge = new bx_piix3_c();
-      bx_devices.pluginPci2IsaBridge = thePci2IsaBridge;
-      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePci2IsaBridge, BX_PLUGIN_PCI2ISA);
-    } else {
-      return -1;
-    }
+    thePci2IsaBridge = new bx_piix3_c();
+    bx_devices.pluginPci2IsaBridge = thePci2IsaBridge;
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePci2IsaBridge, BX_PLUGIN_PCI2ISA);
   } else if (mode == PLUGIN_FINI) {
     delete thePci2IsaBridge;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_CORE;
   }
   return 0; // Success

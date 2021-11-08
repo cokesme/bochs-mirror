@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hdimage.cc 14139 2021-02-10 07:29:14Z vruppert $
+// $Id: hdimage.cc 14229 2021-04-18 17:20:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -25,7 +25,10 @@
 #include "osdep.h"
 #include "misc/bswap.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "gui/siminterface.h"
+#include "param_names.h"
+#include "plugin.h"
 #include "cdrom.h"
 #include "cdrom_amigaos.h"
 #include "cdrom_misc.h"
@@ -115,7 +118,7 @@ void bx_hdimage_ctl_c::list_modules(void)
   list[0] = 0;
   while (hdimage_mode_names[i] != NULL) {
     len1 = strlen(hdimage_mode_names[i]);
-    if ((len + len1 + 1) > 60) {
+    if ((len + len1 + 1) > 58) {
       BX_INFO((" %s", list));
       list[0] = 0;
       len = 0;
@@ -620,6 +623,7 @@ bool hdimage_copy_file(const char *src, const char *dst)
 
 device_image_t::device_image_t()
 {
+  cylinders = 0;
   hd_size = 0;
   sect_size = 512;
 }

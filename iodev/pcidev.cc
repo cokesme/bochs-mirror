@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcidev.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: pcidev.cc 14202 2021-03-26 18:41:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -129,8 +129,10 @@ PLUGIN_ENTRY_FOR_MODULE(pcidev)
     bx_list_c *menu = (bx_list_c*)SIM->get_param("network");
     menu->remove("pcidev");
     delete thePciDevAdapter;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
   return 0; // Success
 }
@@ -240,7 +242,8 @@ void bx_pcidev_c::init(void)
   // Check if the device is disabled or not configured
   if (SIM->get_param_num(BXPN_PCIDEV_VENDOR)->get() == 0xffff) {
     BX_INFO(("Host PCI device mapping disabled"));
-    BX_UNREGISTER_DEVICE_DEVMODEL("pcidev");
+    // mark unused plugin for removal
+    ((bx_param_bool_c*)((bx_list_c*)SIM->get_param(BXPN_PLUGIN_CTRL))->get_by_name("pcidev"))->set(0);
     return;
   }
 

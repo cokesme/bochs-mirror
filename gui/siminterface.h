@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.h 14129 2021-02-06 16:51:55Z vruppert $
+// $Id: siminterface.h 14189 2021-03-18 19:50:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -70,7 +70,7 @@
 // bx_floppy.s.media[2].heads = 17.  If such access is needed, then a
 // siminterface method should be written to make the change on the CI's behalf.
 // This separation is enforced by the fact that the CI does not even include
-// bochs.h.  You'll notice that textconfig.cc includes osdep.h, textconfig.h,
+// bochs.h.  You'll notice that textconfig.cc includes osdep.h, paramtree.h
 // and siminterface.h, so it doesn't know what bx_floppy or bx_cpu_c are.
 // I'm sure some people will say is overly restrictive and/or annoying.  When I
 // set it up this way, we were still talking about making the CI in a seperate
@@ -102,30 +102,6 @@
 // Also this header file declares data structures for certain events that pass
 // between the siminterface and the CI.  Search for "event structures" below.
 
-
-//////////////////////////////////////////////////////
-// BX_USE_TEXTCONFIG should be set to 1 when the text mode configuration interface
-// is compiled in.  This gives each type of parameter a text_print and text_ask
-// method (defined in gui/textconfig.cc) so that you can call text_ask() on any
-// kind of parameter to ask the user to edit the value.
-//
-// I have been considering whether to use the same strategy for the
-// wxWidgets interface, but I'm not sure if I like it.  One problem is
-// that in order to declare member functions that are useful for
-// wxWidgets, the wxWidgets header files would have to be included
-// before the param object definitions.  That means that all the
-// wxWidgets headers would have be included when compiling every
-// single bochs file.  One of the things I like about the separation
-// between the simulator and CI is that the two parts can be
-// compiled without any knowledge of the other.  Bochs doesn't include
-// <wx.h>, and the wxWidgets CI (wxmain.cc) doesn't need to include <bochs.h>.
-// Aside from making compiles faster, this enforces the use of the siminterface
-// so it keeps the interface clean (important when we may have multiple UI
-// implementations for example).  This argues for keeping UI-specific
-// structures out of the simulator interface.  It certainly works ok for the
-// text interface, but that's because FILE* is standard and portable.
-
-//////////////////////////////////////////////////////
 
 // base value for generated new parameter id
 #define BXP_NEW_PARAM_ID 1001
@@ -440,8 +416,6 @@ typedef struct {
   } u;
 } BxEvent;
 
-#include "paramtree.h"
-
 // These are the different start modes.
 enum {
   // Just start the simulation without running the configuration interface
@@ -611,8 +585,8 @@ public:
   bx_simulator_interface_c() {}
   virtual ~bx_simulator_interface_c() {}
   virtual void set_quit_context(jmp_buf *context) {}
-  virtual int get_init_done() { return 0; }
-  virtual int set_init_done(int n) {return 0;}
+  virtual bool get_init_done() { return 0; }
+  virtual int set_init_done(bool n) {return 0;}
   virtual void reset_all_param() {}
   // new param methods
   virtual bx_param_c *get_param(const char *pname, bx_param_c *base=NULL) {return NULL;}
@@ -772,8 +746,8 @@ public:
   virtual void init_usb_options(const char *usb_name, const char *pname, int maxports) {}
   virtual int  parse_param_from_list(const char *context, const char *param, bx_list_c *base) {return 0;}
   virtual int  parse_nic_params(const char *context, const char *param, bx_list_c *base) {return 0;}
-  virtual int  parse_usb_port_params(const char *context, bool devopt,
-                                     const char *param, int maxports, bx_list_c *base) {return 0;}
+  virtual int  parse_usb_port_params(const char *context, const char *param,
+                                     int maxports, bx_list_c *base) {return -1;}
   virtual int  split_option_list(const char *msg, const char *rawopt, char **argv, int max_argv) {return 0;}
   virtual int  write_param_list(FILE *fp, bx_list_c *base, const char *optname, bool multiline) {return 0;}
   virtual int  write_usb_options(FILE *fp, int maxports, bx_list_c *base) {return 0;}

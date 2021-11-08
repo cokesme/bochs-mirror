@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundosx.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: soundosx.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2004-2021  The Bochs Project
@@ -29,7 +29,8 @@
 #include <MacTypes.h>
 #endif
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 #include "soundlow.h"
 #include "soundmod.h"
 #include "soundosx.h"

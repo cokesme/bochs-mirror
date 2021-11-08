@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_common.h 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: usb_common.h 14227 2021-04-17 18:57:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // Generic USB emulation code
@@ -29,6 +29,12 @@
 
 #ifndef BX_IODEV_USB_COMMON_H
 #define BX_IODEV_USB_COMMON_H
+
+// for the Packet Capture code to work, these four must remain as is
+#define USB_TRANS_TYPE_ISO      0
+#define USB_TRANS_TYPE_INT      1
+#define USB_TRANS_TYPE_CONTROL  2
+#define USB_TRANS_TYPE_BULK     3
 
 #define USB_TOKEN_IN    0x69
 #define USB_TOKEN_OUT   0xE1
@@ -127,6 +133,8 @@ typedef void USBCallback(int event, USBPacket *packet, void *dev, int port);
 
 class usb_device_c;
 
+#include "usb_pcap.h"
+
 struct USBPacket {
   int pid;
   Bit8u devaddr;
@@ -146,35 +154,15 @@ typedef struct USBAsync {
   struct USBAsync *next;
 } USBAsync;
 
-enum usbmod_type {
-  USB_MOD_TYPE_NONE=0,
-  USB_MOD_TYPE_CBI,
-  USB_MOD_TYPE_HID,
-  USB_MOD_TYPE_HUB,
-  USB_MOD_TYPE_MSD,
-  USB_MOD_TYPE_PRINTER
-};
-
-enum usbdev_type {
-  USB_DEV_TYPE_NONE=0,
-  USB_DEV_TYPE_MOUSE,
-  USB_DEV_TYPE_TABLET,
-  USB_DEV_TYPE_KEYPAD,
-  USB_DEV_TYPE_KEYBOARD,
-  USB_DEV_TYPE_DISK,
-  USB_DEV_TYPE_CDROM,
-  USB_DEV_TYPE_HUB,
-  USB_DEV_TYPE_PRINTER,
-  USB_DEV_TYPE_FLOPPY
-};
-
 class BOCHSAPI bx_usbdev_ctl_c : public logfunctions {
 public:
   bx_usbdev_ctl_c();
   virtual ~bx_usbdev_ctl_c() {}
   void init(void);
   void exit(void);
-  virtual int init_device(bx_list_c *portconf, logfunctions *hub, void **dev, bx_list_c *sr_list);
+  const char **get_device_names(void);
+  void list_devices(void);
+  virtual bool init_device(bx_list_c *portconf, logfunctions *hub, void **dev);
 private:
   void parse_port_options(usb_device_c *dev, bx_list_c *portconf);
 };
@@ -184,7 +172,7 @@ BOCHSAPI extern bx_usbdev_ctl_c bx_usbdev_ctl;
 class BOCHSAPI usb_device_c : public logfunctions {
 public:
   usb_device_c(void);
-  virtual ~usb_device_c() {}
+  virtual ~usb_device_c();
 
   virtual bool init() {return d.connected;}
   virtual const char* get_info() {return NULL;}
@@ -202,7 +190,6 @@ public:
   virtual void runtime_config() {}
 
   bool get_connected() {return d.connected;}
-  usbdev_type get_type() {return d.type;}
   int get_speed() {return d.speed;}
   bool set_speed(int speed)
   {
@@ -223,19 +210,20 @@ public:
     d.event.port = port;
   }
   void set_debug_mode();
+  void set_pcap_mode(const char *pcap_name);
 
   void usb_send_msg(int msg);
 
 protected:
   struct {
-    enum usbdev_type type;
+    Bit8u type;
     bool connected;
     int minspeed;
     int maxspeed;
     int speed;
     Bit8u addr;
     Bit8u config;
-    Bit8u interface;
+    Bit8u iface;
     char devname[32];
 
     const Bit8u *dev_descriptor;
@@ -261,10 +249,13 @@ protected:
       int port;
     } event;
     bx_list_c *sr;
+
+    bool pcap_mode;
+    pcap_image_t pcapture;
   } d;
 
   int handle_control_common(int request, int value, int index, int length, Bit8u *data);
-  void usb_dump_packet(Bit8u *data, unsigned size);
+  void usb_dump_packet(Bit8u *data, unsigned size, int bus, int dev_addr, int ep, int type, bool is_setup, bool can_append);
   int set_usb_string(Bit8u *buf, const char *str);
 };
 
@@ -386,11 +377,11 @@ class BOCHSAPI_MSVCONLY usbdev_locator_c {
 public:
   static bool module_present(const char *type);
   static void cleanup();
-  static usb_device_c *create(const char *type, usbdev_type devtype, const char *args);
+  static usb_device_c *create(const char *type, const char *devname);
 protected:
   usbdev_locator_c(const char *type);
   virtual ~usbdev_locator_c();
-  virtual usb_device_c *allocate(usbdev_type devtype, const char *args) = 0;
+  virtual usb_device_c *allocate(const char *devname) = 0;
 private:
   static usbdev_locator_c *all;
   usbdev_locator_c *next;

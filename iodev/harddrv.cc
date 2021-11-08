@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: harddrv.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: harddrv.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -117,7 +117,7 @@ PLUGIN_ENTRY_FOR_MODULE(harddrv)
     BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theHardDrive, BX_PLUGIN_HARDDRV);
   } else if (mode == PLUGIN_FINI) {
     delete theHardDrive;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_STANDARD;
   }
   return(0); // Success
@@ -182,7 +182,7 @@ void bx_hard_drive_c::init(void)
   const char *image_mode;
   bx_list_c *base;
 
-  BX_DEBUG(("Init $Id: harddrv.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: harddrv.cc 14163 2021-02-26 20:37:49Z vruppert $"));
 
   for (channel=0; channel<BX_MAX_ATA_CHANNEL; channel++) {
     sprintf(ata_name, "ata.%d.resources", channel);
@@ -3637,7 +3637,7 @@ int get_device_handle_from_param(bx_param_c *param)
   }
 }
 
-Bit64s bx_hard_drive_c::cdrom_status_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_hard_drive_c::cdrom_status_handler(bx_param_c *param, bool set, Bit64s val)
 {
   if (set) {
     int handle = get_device_handle_from_param(param);
@@ -3658,7 +3658,7 @@ Bit64s bx_hard_drive_c::cdrom_status_handler(bx_param_c *param, int set, Bit64s 
   return val;
 }
 
-const char *bx_hard_drive_c::cdrom_path_handler(bx_param_string_c *param, int set,
+const char *bx_hard_drive_c::cdrom_path_handler(bx_param_string_c *param, bool set,
                                                 const char *oldval, const char *val, int maxlen)
 {
   if (set) {

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.h 14094 2021-01-30 18:32:52Z vruppert $
+// $Id: wxmain.h 14177 2021-03-08 09:04:16Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -33,7 +33,6 @@ class LogViewDialog;
 
 //hack alert; yuck; FIXME
 extern MyFrame *theFrame;
-extern MyPanel *thePanel;
 
 // wxBochsClosing flag, see comments in wxmain.h
 extern bool wxBochsClosing;

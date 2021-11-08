@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_printer.h 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: usb_printer.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
@@ -25,10 +25,11 @@
 
 class usb_printer_device_c : public usb_device_c {
 public:
-  usb_printer_device_c(usbdev_type type, const char *filename);
+  usb_printer_device_c(void);
   virtual ~usb_printer_device_c(void);
 
   virtual bool init();
+  virtual bool set_option(const char *option);
   virtual const char* get_info();
 
   virtual void handle_reset();
@@ -39,13 +40,13 @@ public:
 private:
   struct {
     Bit8u printer_status;
-    const char *fname;
+    char fname[BX_PATHNAME_LEN];
     bx_list_c *config;
     FILE *fp;
-    char info_txt[BX_PATHNAME_LEN];
+    char info_txt[BX_PATHNAME_LEN + 20];
   } s;
 
-  static const char* printfile_handler(bx_param_string_c *param, int set,
+  static const char* printfile_handler(bx_param_string_c *param, bool set,
                                        const char *oldval, const char *val, int maxlen);
 };
 

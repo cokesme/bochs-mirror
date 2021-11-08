@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wx.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: wx.cc 14204 2021-03-27 17:23:31Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -79,7 +79,7 @@ PLUGIN_ENTRY_FOR_GUI_MODULE(wx)
     SIM->get_param_enum(BXPN_SEL_DISPLAY_LIBRARY)->set_enabled(0);
     MyPanel::OnPluginInit();
   } else if (mode == PLUGIN_PROBE) {
-    return (int)PLUGTYPE_GUI;
+    return (int)(PLUGTYPE_CI | PLUGTYPE_GUI);
   }
   return 0; // success
 }
@@ -99,6 +99,9 @@ public:
   void show_ips(Bit32u ips_count);
 #endif
 };
+
+// this variable uses the bx_wx_gui_c object to access MyPanel
+static MyPanel *thePanel = NULL;
 
 // declare one instance of the gui object and call macro to insert the
 // plugin code

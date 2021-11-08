@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundmod.cc 14139 2021-02-10 07:29:14Z vruppert $
+// $Id: soundmod.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2011-2021  The Bochs Project
@@ -20,7 +20,10 @@
 
 // Sound driver loader code
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "gui/siminterface.h"
+#include "param_names.h"
 
 #if BX_SUPPORT_SOUNDLOW
 
@@ -84,7 +87,7 @@ void bx_soundmod_ctl_c::list_modules(void)
   list[0] = 0;
   while (sound_driver_names[i] != NULL) {
     len1 = strlen(sound_driver_names[i]);
-    if ((len + len1 + 1) > 60) {
+    if ((len + len1 + 1) > 58) {
       BX_INFO((" %s", list));
       list[0] = 0;
       len = 0;

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gdbstub.cc 14089 2021-01-30 15:16:00Z vruppert $
+// $Id: gdbstub.cc 14283 2021-06-14 05:45:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project Team
@@ -41,6 +41,8 @@
 #include "bochs.h"
 #include "param_names.h"
 #include "cpu/cpu.h"
+#include "gui/siminterface.h"
+#include "memory/memory-bochs.h"
 
 #define LOG_THIS gdbstublog->
 #define IFDBG(x) x

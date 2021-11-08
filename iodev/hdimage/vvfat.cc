@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vvfat.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: vvfat.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // Virtual VFAT image support (shadows a local directory)
@@ -49,7 +49,9 @@
 #include <utime.h>
 #endif
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "gui/siminterface.h"
 #include "hdimage.h"
 #include "vvfat.h"
 

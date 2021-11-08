@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxdialog.cc 14104 2021-01-30 20:24:27Z vruppert $
+// $Id: wxdialog.cc 14183 2021-03-13 09:54:06Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -44,6 +44,7 @@
 #include <wx/notebook.h>
 
 #include "osdep.h"               // workarounds for missing stuff
+#include "gui/paramtree.h"       // config parameter tree
 #include "gui/siminterface.h"    // interface to the simulator
 #include "logio.h"               // log level definitions
 #include "wxdialog.h"            // custom dialog boxes
@@ -480,8 +481,7 @@ PluginControlDialog::PluginControlDialog(
   buttonSizer->Add(btn, 0, wxALL, 5);
   btn = new wxButton(this, wxID_OK, BTNLABEL_OK);
   buttonSizer->Add(btn, 0, wxALL, 5);
-  // make sure all plugins are loaded and add them to the listbox
-  SIM->opt_plugin_ctrl("*", 1);
+  // add plugin names to the listboxes
   bx_list_c *plugin_ctrl = (bx_list_c*) SIM->get_param(BXPN_PLUGIN_CTRL);
   int a = 0, b = 0;
   for (int i = 0; i < plugin_ctrl->get_size(); i++) {
@@ -1169,6 +1169,8 @@ void ParamDialog::EnableParam(int param_id, bool enabled)
 void ParamDialog::ProcessDependentList(ParamStruct *pstrChanged, bool enabled)
 {
   bx_param_c *dparam;
+  bx_param_string_c *sparam;
+  param_enable_handler enable_handler;
   ParamStruct *pstr;
   Bit64s value;
   bool en;
@@ -1185,6 +1187,13 @@ void ParamDialog::ProcessDependentList(ParamStruct *pstrChanged, bool enabled)
         dparam = list->get(i);
         if (dparam != enump) {
           en = (enable_bitmap & mask) && enabled;
+          if (dparam->get_type() == BXT_PARAM_STRING) {
+            sparam = (bx_param_string_c*)dparam;
+            enable_handler = sparam->get_enable_handler();
+            if (enable_handler) {
+              en = enable_handler(sparam, en);
+            }
+          }
           pstr = (ParamStruct*) paramHash->Get(dparam->get_id());
           if (pstr) {
             if (en != pstr->u.window->IsEnabled()) {

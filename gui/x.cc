@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: x.cc 14094 2021-01-30 18:32:52Z vruppert $
+// $Id: x.cc 14277 2021-06-11 14:46:38Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -113,6 +113,7 @@ static unsigned font_width, font_height;
 static Window win;
 static GC gc, gc_inv, gc_headerbar, gc_headerbar_inv;
 static unsigned dimension_x=0, dimension_y=0;
+static Bit16u x11_max_xres=0, x11_max_yres=0;
 
 static XImage *ximage = NULL;
 static unsigned imDepth, imWide, imBPP;
@@ -588,7 +589,7 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   /* create GC for text and drawing */
   unsigned long valuemask = 0; /* ignore XGCvalues and use defaults */
   XGCValues values;
-  int      default_depth;
+  int default_depth;
   XEvent report;
   XSetWindowAttributes win_attr;
   unsigned long plane_masks_return[1];
@@ -596,12 +597,12 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 #if BX_DEBUGGER && BX_DEBUGGER_GUI
   bool x11_with_debug_gui = 0;
 #endif
+  int event_base, error_base;
 
   put("XGUI");
-
   bx_headerbar_y = headerbar_y;
-
   progname = argv[0];
+  console.present = 1;
 
   // parse x11 specific options
   if (argc > 1) {
@@ -620,6 +621,8 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 #endif
       } else if (!strcmp(argv[i], "cmdmode")) {
         command_mode.present = 1;
+      } else if (!strcmp(argv[i], "no_gui_console")) {
+        console.present = 0;
       } else {
         BX_PANIC(("Unknown x11 option '%s'", argv[i]));
       }
@@ -916,10 +919,33 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   }
 #endif
 
+  Display *dpy = XOpenDisplay(NULL);
+  if (dpy == NULL) {
+    BX_PANIC(("Cannot connect to X display"));
+  }
+  Window root = RootWindow(dpy, 0);
+
+  if (XRRQueryExtension(dpy, &event_base, &error_base)) {
+    int num_sizes;
+    Rotation original_rotation;
+
+    XRRScreenSize *xrrs = XRRSizes(dpy, 0, &num_sizes);
+    XRRScreenConfiguration *conf = XRRGetScreenInfo(dpy, root);
+    SizeID original_size_id = XRRConfigCurrentConfiguration(conf, &original_rotation);
+    x11_max_xres = xrrs[original_size_id].width;
+    x11_max_yres = xrrs[original_size_id].height - bx_headerbar_y - bx_statusbar_y;
+    free(conf);
+  } else {
+    int screen = DefaultScreen(dpy);
+    x11_max_xres = DisplayWidth(dpy, screen);
+    x11_max_yres = DisplayHeight(dpy, screen) - bx_headerbar_y - bx_statusbar_y;
+  }
+  XCloseDisplay(dpy);
+  BX_INFO(("maximum host resolution: x=%d y=%d", x11_max_xres, x11_max_yres));
+
   new_gfx_api = 1;
   new_text_api = 1;
   dialog_caps |= (BX_GUI_DLG_USER | BX_GUI_DLG_SNAPSHOT | BX_GUI_DLG_CDROM);
-  console.present = 1;
 }
 
 void bx_x_gui_c::handle_events(void)
@@ -1668,29 +1694,8 @@ void bx_x_gui_c::beep_off()
 #if BX_HAVE_XRANDR_H
 void bx_x_gui_c::get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp)
 {
-  int num_sizes;
-  Rotation original_rotation;
-  int event_base, error_base;
-
-  Display *dpy = XOpenDisplay(NULL);
-  if (dpy == NULL) {
-    BX_PANIC(("Cannot connect to X display"));
-  }
-  Window root = RootWindow(dpy, 0);
-
-  if (XRRQueryExtension(dpy, &event_base, &error_base)) {
-    XRRScreenSize *xrrs = XRRSizes(dpy, 0, &num_sizes);
-    XRRScreenConfiguration *conf = XRRGetScreenInfo(dpy, root);
-    SizeID original_size_id = XRRConfigCurrentConfiguration(conf, &original_rotation);
-    *xres = xrrs[original_size_id].width;
-    *yres = xrrs[original_size_id].height - bx_headerbar_y - bx_statusbar_y;
-    free(conf);
-  } else {
-    int screen = DefaultScreen(dpy);
-    *xres = DisplayWidth(dpy, screen);
-    *yres = DisplayHeight(dpy, screen) - bx_headerbar_y - bx_statusbar_y;
-  }
-  XCloseDisplay(dpy);
+  *xres = x11_max_xres;
+  *yres = x11_max_yres;
   // always return 32 bit depth
   *bpp = 32;
 }

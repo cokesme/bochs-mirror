@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: smm.cc 14086 2021-01-30 08:35:35Z sshwarts $
+// $Id: smm.cc 14256 2021-05-25 06:27:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2006-2018 Stanislav Shwartsman
@@ -151,7 +151,12 @@ void BX_CPU_C::enter_system_management_mode(void)
 #endif
 
 #if BX_CPU_LEVEL >= 5
-  BX_CPU_THIS_PTR efer.set32(0);
+#if BX_SUPPORT_X86_64
+  if (BX_CPU_THIS_PTR efer.get_SVME())
+    BX_CPU_THIS_PTR efer.set32(BX_EFER_SVME_MASK);
+  else
+#endif
+    BX_CPU_THIS_PTR efer.set32(0);
 #endif
 
   parse_selector(BX_CPU_THIS_PTR smbase >> 4,
@@ -215,10 +220,10 @@ static unsigned smram_map[SMRAM_FIELD_LAST];
 
 void BX_CPU_C::init_SMRAM(void)
 {
-  static bool smram_map_ready = 0;
+  static bool smram_map_ready = false;
 
   if (smram_map_ready) return;
-  smram_map_ready = 1;
+  smram_map_ready = true;
 
   smram_map[SMRAM_FIELD_SMBASE_OFFSET] = SMRAM_TRANSLATE(0x7f00);
   smram_map[SMRAM_FIELD_SMM_REVISION_ID] = SMRAM_TRANSLATE(0x7efc);

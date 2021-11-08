@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpu.h 14133 2021-02-08 13:06:44Z sshwarts $
+// $Id: cpu.h 14318 2021-07-23 09:30:17Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2020  The Bochs Project
@@ -5084,6 +5084,7 @@ public: // for now...
 #endif
 
 #if BX_SUPPORT_SVM
+  BX_SMF void set_VMCBPTR(Bit64u vmcbptr);
   BX_SMF void SvmEnterSaveHostState(SVM_HOST_STATE *host);
   BX_SMF bool SvmEnterLoadCheckControls(SVM_CONTROLS *ctrls);
   BX_SMF bool SvmEnterLoadCheckGuestState(void);

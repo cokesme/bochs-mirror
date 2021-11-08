@@ -1,6 +1,6 @@
 ###################################################################
 # doc/docbook/Makefile
-# $Id: Makefile.in 13800 2020-01-27 18:22:12Z vruppert $
+# $Id: Makefile.in 14281 2021-06-13 08:02:33Z vruppert $
 #
 # Builds documentation in various formats from SGML source, and
 # allows easy update to the Bochs web site.
@@ -13,7 +13,7 @@ abs_srcdir      = @abs_srcdir@
 docdir          = $(prefix)/share/doc/bochs
 WGET = @WGET@
 TARGZ = bochsdoc.tar.gz
-RENDERED_DOC_URL = http://bochs.sf.net/doc/docbook/$(TARGZ)
+RENDERED_DOC_URL = https://bochs.sourceforge.io/doc/docbook/$(TARGZ)
 
 # docbook-utils build if found
 DOCBOOK2HTML = @DOCBOOK2HTML@

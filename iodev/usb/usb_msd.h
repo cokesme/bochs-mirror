@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_msd.h 14117 2021-02-01 12:42:12Z vruppert $
+// $Id: usb_msd.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  USB mass storage device support (ported from QEMU)
@@ -32,7 +32,7 @@ class scsi_device_t;
 
 class usb_msd_device_c : public usb_device_c {
 public:
-  usb_msd_device_c(usbdev_type type, const char *filename);
+  usb_msd_device_c(const char *devname);
   virtual ~usb_msd_device_c(void);
 
   virtual bool init();
@@ -86,9 +86,9 @@ private:
     USBPacket *packet;
   } s;
 
-  static const char *cdrom_path_handler(bx_param_string_c *param, int set,
-                                             const char *oldval, const char *val, int maxlen);
-  static Bit64s cdrom_status_handler(bx_param_c *param, int set, Bit64s val);
+  static const char *cdrom_path_handler(bx_param_string_c *param, bool set,
+                                        const char *oldval, const char *val, int maxlen);
+  static Bit64s cdrom_status_handler(bx_param_c *param, bool set, Bit64s val);
 };
 
 #endif

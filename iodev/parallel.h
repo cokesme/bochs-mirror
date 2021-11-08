@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parallel.h 14112 2021-01-31 10:50:53Z vruppert $
+// $Id: parallel.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -78,7 +78,7 @@ private:
   Bit32u read(Bit32u address, unsigned io_len);
   void   write(Bit32u address, Bit32u value, unsigned io_len);
 #endif
-  static const char* parport_file_param_handler(bx_param_string_c *param, int set,
+  static const char* parport_file_param_handler(bx_param_string_c *param, bool set,
                                                 const char *oldval, const char *val,
                                                 int maxlen);
 };

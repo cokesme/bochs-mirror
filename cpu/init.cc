@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: init.cc 14100 2021-01-30 19:40:18Z sshwarts $
+// $Id: init.cc 14320 2021-07-25 18:01:28Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -69,6 +69,13 @@ BX_CPU_C::BX_CPU_C(unsigned id): bx_cpuid(id)
 #if BX_CPU_LEVEL >= 4
 
 #include "generic_cpuid.h"
+
+enum {
+#define bx_define_cpudb(model) bx_cpudb_##model,
+#include "cpudb.h"
+  bx_cpudb_model_last
+};
+#undef bx_define_cpudb
 
 #define bx_define_cpudb(model) \
   extern bx_cpuid_t *create_ ##model##_cpuid(BX_CPU_C *cpu);
@@ -657,6 +664,10 @@ void BX_CPU_C::after_restore_state(void)
   set_VMCSPTR(BX_CPU_THIS_PTR vmcsptr);
 #endif
 
+#if BX_SUPPORT_SVM
+  set_VMCBPTR(BX_CPU_THIS_PTR vmcbptr);
+#endif
+
 #if BX_SUPPORT_PKEYS
   set_PKeys(BX_CPU_THIS_PTR pkru, BX_CPU_THIS_PTR pkrs);
 #endif
@@ -1056,13 +1067,9 @@ void BX_CPU_C::reset(unsigned source)
 #endif
 
 #if BX_SUPPORT_SVM
+  set_VMCBPTR(0);
   BX_CPU_THIS_PTR in_svm_guest = 0;
   BX_CPU_THIS_PTR svm_gif = 1;
-  BX_CPU_THIS_PTR vmcbptr = 0;
-  BX_CPU_THIS_PTR vmcbhostptr = 0;
-#if BX_SUPPORT_MEMTYPE
-  BX_CPU_THIS_PTR vmcb_memtype = BX_MEMTYPE_UC;
-#endif
 #endif
 
 #if BX_SUPPORT_VMX || BX_SUPPORT_SVM

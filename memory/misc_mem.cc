@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc_mem.cc 14141 2021-02-11 15:05:06Z sshwarts $
+// $Id: misc_mem.cc 14290 2021-06-24 17:03:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2020  The Bochs Project
@@ -96,7 +96,7 @@ void BX_MEM_C::init_memory(Bit64u guest, Bit64u host)
 {
   unsigned i, idx;
 
-  BX_DEBUG(("Init $Id: misc_mem.cc 14141 2021-02-11 15:05:06Z sshwarts $"));
+  BX_DEBUG(("Init $Id: misc_mem.cc 14290 2021-06-24 17:03:09Z vruppert $"));
 
   // accept only memory size which is multiply of 1M
   BX_ASSERT((host & 0xfffff) == 0);
@@ -318,17 +318,16 @@ void BX_MEM_C::register_state()
 #if BX_LARGE_RAMFILE
   bx_shadow_filedata_c *ramfile = new bx_shadow_filedata_c(list, "ram", &(BX_MEM_THIS overflow_file));
   ramfile->set_sr_handlers(this, ramfile_save_handler, (filedata_restore_handler)NULL);
+  BXRS_DEC_PARAM_FIELD(list, next_swapout_idx, BX_MEM_THIS next_swapout_idx);
 #else
   new bx_shadow_data_c(list, "ram", BX_MEM_THIS vector, BX_MEM_THIS allocated);
 #endif
-  BXRS_DEC_PARAM_FIELD(list, len, BX_MEM_THIS len);
-  BXRS_DEC_PARAM_FIELD(list, allocated, BX_MEM_THIS allocated);
   BXRS_DEC_PARAM_FIELD(list, used_blocks, BX_MEM_THIS used_blocks);
 
   bx_list_c *mapping = new bx_list_c(list, "mapping");
   for (Bit32u blk=0; blk < num_blocks; blk++) {
     sprintf(param_name, "blk%d", blk);
-    bx_param_num_c *param = new bx_param_num_c(mapping, param_name, "", "", 0, BX_MAX_BIT32U, 0);
+    bx_param_num_c *param = new bx_param_num_c(mapping, param_name, "", "", -2, BX_MAX_BIT32U, 0);
     param->set_base(BASE_DEC);
     param->set_sr_handlers(this, memory_param_save_handler, memory_param_restore_handler);
   }

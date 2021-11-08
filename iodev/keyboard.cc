@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: keyboard.cc 14131 2021-02-07 16:16:06Z vruppert $
+// $Id: keyboard.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2021  The Bochs Project
@@ -65,7 +65,7 @@ PLUGIN_ENTRY_FOR_MODULE(keyboard)
     BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theKeyboard, BX_PLUGIN_KEYBOARD);
   } else if (mode == PLUGIN_FINI) {
     delete theKeyboard;
-  } else {
+  } else if (mode == PLUGIN_PROBE) {
     return (int)PLUGTYPE_STANDARD;
   }
   return 0; // Success
@@ -106,7 +106,7 @@ void bx_keyb_c::resetinternals(bool powerup)
 
 void bx_keyb_c::init(void)
 {
-  BX_DEBUG(("Init $Id: keyboard.cc 14131 2021-02-07 16:16:06Z vruppert $"));
+  BX_DEBUG(("Init $Id: keyboard.cc 14163 2021-02-26 20:37:49Z vruppert $"));
   Bit32u   i;
 
   DEV_register_irq(1, "8042 Keyboard controller");

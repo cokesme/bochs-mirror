@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: unmapped.h 14112 2021-01-31 10:50:53Z vruppert $
+// $Id: unmapped.h 14241 2021-05-11 14:42:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2021  The Bochs Project
@@ -44,6 +44,7 @@ private:
   Bit32u read(Bit32u address, unsigned io_len);
   void   write(Bit32u address, Bit32u value, unsigned io_len);
 #endif
+  static Bit64s param_handler(bx_param_c *param, bool set, Bit64s val);
 
   struct {
     Bit8u port80;
